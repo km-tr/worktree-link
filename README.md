@@ -2,6 +2,8 @@
 
 A CLI tool that automatically creates symlinks from a main git worktree to a new worktree based on glob patterns.
 
+Short alias `wtl` is also available.
+
 ## Use Cases
 
 - Share `node_modules` across worktrees (avoid installing dependencies per worktree)
@@ -30,10 +32,13 @@ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/km-tr/worktree-link/rel
 cargo install --path .
 ```
 
+> **Note:** The `wtl` alias is only available when installed via Homebrew or the shell script installer. When building from source, only the `worktree-link` binary is installed.
+
 ## Usage
 
 ```text
 worktree-link [OPTIONS] <SOURCE> [TARGET]
+wtl [OPTIONS] <SOURCE> [TARGET]
 ```
 
 ### Arguments
@@ -57,22 +62,22 @@ worktree-link [OPTIONS] <SOURCE> [TARGET]
 
 ```bash
 # Create symlinks from main worktree to the current directory
-worktree-link /path/to/main
+wtl /path/to/main
 
 # Specify the target directory explicitly
-worktree-link /path/to/main ./feature-branch
+wtl /path/to/main ./feature-branch
 
 # Preview with dry-run before creating links
-worktree-link --dry-run /path/to/main
+wtl --dry-run /path/to/main
 
 # Then actually create the links
-worktree-link /path/to/main
+wtl /path/to/main
 
 # Overwrite existing files/symlinks
-worktree-link --force /path/to/main
+wtl --force /path/to/main
 
 # Remove previously created symlinks
-worktree-link --unlink /path/to/main
+wtl --unlink /path/to/main
 ```
 
 ## Configuration (`.worktreelinks`)
