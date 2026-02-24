@@ -107,7 +107,7 @@ Symlinks are created using absolute paths, making them resilient to worktree rel
 ### Safety
 
 - The `.git/` directory is always excluded
-- Existing files/symlinks are never overwritten unless `--force` is specified
+- Existing files, symlinks, and directories are never overwritten unless `--force` is specified (directories are removed recursively)
 - `--unlink` only removes symlinks that point into the source directory
 
 ## Platform Support

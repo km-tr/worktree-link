@@ -230,7 +230,11 @@ pub fn unlink_targets(
             }
         }
 
-        info!("unlinked: {}", entry_path.display());
+        if dry_run {
+            info!("[dry-run] would unlink: {}", entry_path.display());
+        } else {
+            info!("unlinked: {}", entry_path.display());
+        }
         actions.push(UnlinkAction::Removed(entry_path));
         Ok(())
     })?;
