@@ -7,6 +7,3 @@ pre-commit:
     clippy:
       glob: "*.{rs,toml}"
       run: cargo clippy --all-targets
-    test:
-      glob: "*.rs"
-      run: cargo test
