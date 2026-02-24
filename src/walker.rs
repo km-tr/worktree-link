@@ -185,6 +185,23 @@ mod tests {
         assert_eq!(rel, vec![Path::new("src")]);
     }
 
+    #[test]
+    fn collect_targets_worktreelinks_overrides_gitignore() {
+        let dir = git_tempdir("collect_override");
+        fs::write(dir.join(".env"), "SECRET=1").unwrap();
+        fs::write(dir.join(".gitignore"), ".env\n").unwrap();
+        fs::write(dir.join("README.md"), "# Hello").unwrap();
+
+        // .env is gitignored, but .worktreelinks pattern explicitly includes it
+        let targets = collect_targets(&dir, &[".env".into()], false).unwrap();
+        let rel: Vec<_> = targets
+            .iter()
+            .map(|p| p.strip_prefix(&dir).unwrap())
+            .collect();
+        // .env should be linked because .worktreelinks override takes precedence
+        assert_eq!(rel, vec![Path::new(".env")]);
+    }
+
     fn git_tempdir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("worktree-link-test-{name}"));
         let _ = fs::remove_dir_all(&dir);
