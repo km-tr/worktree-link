@@ -3,15 +3,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Detect the main worktree path by running `git worktree list --porcelain`.
+/// Detect the main worktree from a specific directory by running `git worktree list --porcelain`.
 ///
 /// The first entry in porcelain output is always the main worktree.
 /// Returns the canonicalized path of the main worktree.
-pub fn detect_main_worktree() -> Result<PathBuf> {
-    detect_main_worktree_in(&std::env::current_dir().context("Failed to get current directory")?)
-}
-
-/// Detect the main worktree from a specific directory.
 pub(crate) fn detect_main_worktree_in(dir: &Path) -> Result<PathBuf> {
     let output = Command::new("git")
         .args(["worktree", "list", "--porcelain"])

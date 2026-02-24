@@ -43,7 +43,7 @@ fn main() -> Result<()> {
             }
             resolved
         }
-        None => git::detect_main_worktree()?,
+        None => git::detect_main_worktree_in(&target)?,
     };
 
     if source == target {
