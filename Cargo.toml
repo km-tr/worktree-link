@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 description = "Automatically create symlinks from a main worktree to a new worktree based on .worktreelinks patterns"
 license = "MIT"
+repository = "https://github.com/km-tr/worktree-link"
+homepage = "https://github.com/km-tr/worktree-link"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

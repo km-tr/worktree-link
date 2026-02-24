@@ -11,6 +11,21 @@ A CLI tool that automatically creates symlinks from a main git worktree to a new
 
 ## Installation
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap km-tr/worktree-link https://github.com/km-tr/worktree-link
+brew install worktree-link
+```
+
+### Shell script (macOS / Linux)
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/km-tr/worktree-link/releases/latest/download/worktree-link-installer.sh | sh
+```
+
+### From source
+
 ```bash
 cargo install --path .
 ```
