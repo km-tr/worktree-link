@@ -2,8 +2,11 @@ pre-commit:
   parallel: true
   commands:
     fmt:
+      glob: "*.rs"
       run: cargo fmt -- --check
     clippy:
+      glob: "*.{rs,toml}"
       run: cargo clippy --all-targets
     test:
+      glob: "*.rs"
       run: cargo test
