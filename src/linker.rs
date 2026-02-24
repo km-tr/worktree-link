@@ -306,8 +306,12 @@ fn normalize_lexically(path: &Path) -> PathBuf {
     for component in path.components() {
         match component {
             Component::ParentDir => {
-                if !parts.is_empty() {
-                    parts.pop();
+                // Never pop past root or prefix components
+                match parts.last() {
+                    Some(Component::RootDir | Component::Prefix(_)) | None => {}
+                    _ => {
+                        parts.pop();
+                    }
                 }
             }
             Component::CurDir => {}
