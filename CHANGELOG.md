@@ -1,0 +1,21 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0](https://github.com/km-tr/worktree-link/releases/tag/v0.1.0) - 2026-02-24
+
+### Added
+
+- integrate release-plz with git-cliff for automated changelog generation ([#4](https://github.com/km-tr/worktree-link/pull/4))
+
+### Other
+
+- add dist profile with thin LTO for cargo-dist ([#3](https://github.com/km-tr/worktree-link/pull/3))
+- *(dist)* switch to separate homebrew-tap repository ([#2](https://github.com/km-tr/worktree-link/pull/2))
+- Implement worktree-link CLI tool ([#1](https://github.com/km-tr/worktree-link/pull/1))
+- Initial commit
