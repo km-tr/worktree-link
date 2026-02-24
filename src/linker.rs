@@ -116,7 +116,11 @@ pub fn create_link(
             symlink(source_path, target_path)?;
         }
 
-        info!("overwritten: {}", target_path.display());
+        if dry_run {
+            info!("[dry-run] would overwrite: {}", target_path.display());
+        } else {
+            info!("overwritten: {}", target_path.display());
+        }
         return Ok(LinkAction::Overwritten {
             source: source_path.to_path_buf(),
             target: target_path.to_path_buf(),
@@ -138,7 +142,11 @@ pub fn create_link(
         symlink(source_path, target_path)?;
     }
 
-    info!("linked: {}", target_path.display());
+    if dry_run {
+        info!("[dry-run] would link: {}", target_path.display());
+    } else {
+        info!("linked: {}", target_path.display());
+    }
     Ok(LinkAction::Created {
         source: source_path.to_path_buf(),
         target: target_path.to_path_buf(),
@@ -156,6 +164,11 @@ pub fn unlink_targets(
     target_dir: &Path,
     dry_run: bool,
 ) -> Result<Vec<UnlinkAction>> {
+    // Canonicalize source_dir so the starts_with comparison works correctly
+    // against fully-resolved link destinations.
+    let canonical_source = fs::canonicalize(source_dir)
+        .with_context(|| format!("Failed to canonicalize source dir: {}", source_dir.display()))?;
+
     let mut actions = Vec::new();
 
     walk_symlinks(target_dir, &mut |entry_path| {
@@ -192,7 +205,7 @@ pub fn unlink_targets(
         let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
 
         // Only remove symlinks that point into the source directory
-        if !resolved.starts_with(source_dir) {
+        if !resolved.starts_with(&canonical_source) {
             return Ok(());
         }
 
