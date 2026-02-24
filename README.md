@@ -36,47 +36,49 @@ cargo install --path .
 ## Usage
 
 ```text
-worktree-link [OPTIONS] <SOURCE> [TARGET]
-wtl [OPTIONS] <SOURCE> [TARGET]
+worktree-link [OPTIONS]
+wtl [OPTIONS]
 ```
-
-### Arguments
-
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `SOURCE` | Source directory (main worktree) | Required |
-| `TARGET` | Target directory (new worktree) | `.` (current directory) |
 
 ### Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
+| `-s, --source <DIR>` | Source directory (main worktree) | Auto-detected via `git worktree list` |
+| `-t, --target <DIR>` | Target directory (new worktree) | `.` (current directory) |
 | `-c, --config <FILE>` | Path to config file | `<SOURCE>/.worktreelinks` |
 | `-n, --dry-run` | Show what would be done without making changes | `false` |
 | `-f, --force` | Overwrite existing files/symlinks | `false` |
 | `-v, --verbose` | Enable verbose logging | `false` |
 | `--unlink` | Remove symlinks previously created by worktree-link | `false` |
+| `--no-ignore` | Do not respect .gitignore rules | `false` |
 
 ### Examples
 
 ```bash
-# Create symlinks from main worktree to the current directory
-wtl /path/to/main
+# Create symlinks (auto-detect source from git, target is current directory)
+wtl
+
+# Specify the source directory explicitly
+wtl -s /path/to/main
 
 # Specify the target directory explicitly
-wtl /path/to/main ./feature-branch
+wtl -t /path/to/feature-branch
+
+# Specify both source and target
+wtl -s /path/to/main -t ./feature-branch
 
 # Preview with dry-run before creating links
-wtl --dry-run /path/to/main
-
-# Then actually create the links
-wtl /path/to/main
+wtl --dry-run
 
 # Overwrite existing files/symlinks
-wtl --force /path/to/main
+wtl --force
 
 # Remove previously created symlinks
-wtl --unlink /path/to/main
+wtl --unlink
+
+# Disable .gitignore filtering
+wtl --no-ignore
 ```
 
 ## Configuration (`.worktreelinks`)
@@ -145,7 +147,7 @@ cargo build
 cargo test
 
 # Debug run
-cargo run -- --dry-run /path/to/source /path/to/target
+cargo run -- --dry-run -s /path/to/source -t /path/to/target
 ```
 
 ## License
