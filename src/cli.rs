@@ -31,4 +31,10 @@ pub struct Cli {
     /// Remove symlinks previously created by worktree-link
     #[arg(long)]
     pub unlink: bool,
+
+    /// Don't respect .gitignore rules.
+    /// By default, files matched by .gitignore are excluded unless
+    /// they also match a .worktreelinks pattern.
+    #[arg(long)]
+    pub no_ignore: bool,
 }
