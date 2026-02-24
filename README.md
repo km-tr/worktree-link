@@ -16,8 +16,7 @@ Short alias `wtl` is also available.
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew tap km-tr/worktree-link https://github.com/km-tr/worktree-link
-brew install worktree-link
+brew install km-tr/tap/worktree-link
 ```
 
 ### Shell script (macOS / Linux)
