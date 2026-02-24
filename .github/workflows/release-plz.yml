@@ -24,7 +24,9 @@ jobs:
         with:
           command: release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT is required so that the created tag triggers cargo-dist's release.yml.
+          # GITHUB_TOKEN cannot trigger other workflows (GitHub's loop prevention).
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
 
   release-plz-pr:
     name: Release-plz PR
