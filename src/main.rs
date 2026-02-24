@@ -8,7 +8,6 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use colored::Colorize;
 use std::fs;
-use std::path::PathBuf;
 
 use cli::Cli;
 use config::Config;
@@ -27,9 +26,8 @@ fn main() -> Result<()> {
         .init();
 
     // Resolve target directory
-    let target_raw = cli.target.unwrap_or_else(|| PathBuf::from("."));
-    let target = fs::canonicalize(&target_raw)
-        .with_context(|| format!("Target directory does not exist: {}", target_raw.display()))?;
+    let target = fs::canonicalize(&cli.target)
+        .with_context(|| format!("Target directory does not exist: {}", cli.target.display()))?;
 
     if !target.is_dir() {
         bail!("Target is not a directory: {}", target.display());

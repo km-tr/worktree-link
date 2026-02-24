@@ -10,9 +10,9 @@ pub struct Cli {
     #[arg(short, long)]
     pub source: Option<PathBuf>,
 
-    /// Target directory (new worktree) [default: current directory]
-    #[arg(short, long)]
-    pub target: Option<PathBuf>,
+    /// Target directory (new worktree)
+    #[arg(short, long, default_value = ".")]
+    pub target: PathBuf,
 
     /// Path to config file [default: <SOURCE>/.worktreelinks]
     #[arg(short, long = "config")]

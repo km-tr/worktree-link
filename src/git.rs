@@ -20,8 +20,11 @@ pub(crate) fn detect_main_worktree_in(dir: &Path) -> Result<PathBuf> {
         .context("Failed to run git. Use --source to specify the main worktree path.")?;
 
     if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
         bail!(
-            "Not a git repository (or git is not installed). Use --source to specify the main worktree path."
+            "Failed to detect main worktree: `git worktree list --porcelain` exited with {}.\nstderr:\n{}\nUse --source to specify the main worktree path.",
+            output.status,
+            stderr.trim_end(),
         );
     }
 
