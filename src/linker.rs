@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 /// Describes what happened when attempting to create a link.
 #[derive(Debug, PartialEq)]
@@ -100,6 +100,15 @@ pub fn create_link(
             });
         }
 
+        // Guard: if any parent of target_path is a symlink, removing it
+        // would delete through the symlink into the real source data.
+        if has_symlink_parent(target_path) {
+            return Ok(LinkAction::Skipped {
+                target: target_path.to_path_buf(),
+                reason: "parent directory is a symlink (remove it first)".into(),
+            });
+        }
+
         if !dry_run {
             remove_entry(target_path)
                 .with_context(|| format!("Failed to remove: {}", target_path.display()))?;
@@ -130,6 +139,8 @@ pub fn create_link(
 ///
 /// This walks the target side (not the source), so it also catches stale
 /// symlinks whose source-side originals have been deleted or renamed.
+/// Errors on individual entries are logged as warnings and skipped so that
+/// the walk continues (best-effort).
 pub fn unlink_targets(
     source_dir: &Path,
     target_dir: &Path,
@@ -142,21 +153,43 @@ pub fn unlink_targets(
             return Ok(());
         }
 
-        let link_dest = fs::read_link(&entry_path)
-            .with_context(|| format!("Failed to read symlink: {}", entry_path.display()))?;
+        let link_dest = match fs::read_link(&entry_path) {
+            Ok(dest) => dest,
+            Err(e) => {
+                warn!("Skipping {}: {e}", entry_path.display());
+                actions.push(UnlinkAction::Skipped {
+                    target: entry_path,
+                    reason: format!("cannot read symlink: {e}"),
+                });
+                return Ok(());
+            }
+        };
+
+        // Resolve relative symlink targets to absolute paths for comparison.
+        // fs::read_link can return relative paths, while source_dir is canonical.
+        let resolved = if link_dest.is_absolute() {
+            link_dest
+        } else {
+            match entry_path.parent() {
+                Some(parent) => parent.join(&link_dest),
+                None => link_dest,
+            }
+        };
 
         // Only remove symlinks that point into the source directory
-        if !link_dest.starts_with(source_dir) {
-            actions.push(UnlinkAction::Skipped {
-                target: entry_path.clone(),
-                reason: format!("points to {} (not in source)", link_dest.display()),
-            });
+        if !resolved.starts_with(source_dir) {
             return Ok(());
         }
 
         if !dry_run {
-            remove_entry(&entry_path)
-                .with_context(|| format!("Failed to remove symlink: {}", entry_path.display()))?;
+            if let Err(e) = remove_entry(&entry_path) {
+                warn!("Failed to remove {}: {e}", entry_path.display());
+                actions.push(UnlinkAction::Skipped {
+                    target: entry_path,
+                    reason: format!("removal failed: {e}"),
+                });
+                return Ok(());
+            }
         }
 
         info!("unlinked: {}", entry_path.display());
@@ -179,18 +212,34 @@ pub fn unlink_targets(
 
 /// Recursively walk a directory, calling `visitor` on each symlink found.
 /// Does not follow symlinks (so symlinked directories are visited but not descended into).
+/// Errors on individual entries are warned and skipped (best-effort).
 fn walk_symlinks(dir: &Path, visitor: &mut dyn FnMut(PathBuf) -> Result<()>) -> Result<()> {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            warn!("Skipping directory {}: {e}", dir.display());
+            return Ok(());
+        }
         Err(e) => return Err(e).with_context(|| format!("Failed to read dir: {}", dir.display())),
     };
 
     for entry in entries {
-        let entry = entry?;
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                warn!("Skipping entry: {e}");
+                continue;
+            }
+        };
         let path = entry.path();
-        let meta = fs::symlink_metadata(&path)
-            .with_context(|| format!("Failed to stat: {}", path.display()))?;
+        let meta = match fs::symlink_metadata(&path) {
+            Ok(m) => m,
+            Err(e) => {
+                warn!("Skipping {}: {e}", path.display());
+                continue;
+            }
+        };
 
         if meta.file_type().is_symlink() {
             visitor(path)?;
@@ -200,6 +249,21 @@ fn walk_symlinks(dir: &Path, visitor: &mut dyn FnMut(PathBuf) -> Result<()>) -> 
     }
 
     Ok(())
+}
+
+/// Check if any parent component of `path` is a symlink.
+fn has_symlink_parent(path: &Path) -> bool {
+    let mut current = path.to_path_buf();
+    while let Some(parent) = current.parent() {
+        if parent.as_os_str().is_empty() {
+            break;
+        }
+        if parent.is_symlink() {
+            return true;
+        }
+        current = parent.to_path_buf();
+    }
+    false
 }
 
 fn create_parent_dirs(path: &Path) -> Result<()> {

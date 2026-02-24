@@ -17,7 +17,7 @@ cargo install --path .
 
 ## Usage
 
-```
+```text
 worktree-link [OPTIONS] <SOURCE> [TARGET]
 ```
 
@@ -49,6 +49,8 @@ worktree-link /path/to/main ./feature-branch
 
 # Preview with dry-run before creating links
 worktree-link --dry-run /path/to/main
+
+# Then actually create the links
 worktree-link /path/to/main
 
 # Overwrite existing files/symlinks

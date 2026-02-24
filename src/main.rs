@@ -49,29 +49,13 @@ fn main() -> Result<()> {
         bail!("Source and target must not be nested");
     }
 
-    // Read config
-    let config_path = cli
-        .config
-        .clone()
-        .unwrap_or_else(|| source.join(".worktreelinks"));
-    let config = Config::from_file(&config_path)?;
-
-    if config.patterns.is_empty() {
-        println!(
-            "{} No patterns found in {}",
-            "WARN".yellow().bold(),
-            config_path.display()
-        );
-        return Ok(());
-    }
-
     if cli.dry_run {
         println!("{}", "DRY RUN — no changes will be made".cyan().bold());
     }
 
     if cli.unlink {
         // Unlink mode: walk the target directory looking for symlinks into source.
-        // This catches stale symlinks even if the source-side file was deleted.
+        // No config file needed — we scan target for any symlink pointing into source.
         let actions = linker::unlink_targets(&source, &target, cli.dry_run)?;
 
         let mut removed = 0;
@@ -97,7 +81,22 @@ fn main() -> Result<()> {
             format!("Removed: {removed}, Skipped: {skipped}").bold()
         );
     } else {
-        // Link mode: collect matching files/directories from source
+        // Link mode: read config and collect matching files/directories from source
+        let config_path = cli
+            .config
+            .clone()
+            .unwrap_or_else(|| source.join(".worktreelinks"));
+        let config = Config::from_file(&config_path)?;
+
+        if config.patterns.is_empty() {
+            println!(
+                "{} No patterns found in {}",
+                "WARN".yellow().bold(),
+                config_path.display()
+            );
+            return Ok(());
+        }
+
         let targets = walker::collect_targets(&source, &config.patterns)?;
 
         if targets.is_empty() {
