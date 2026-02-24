@@ -21,7 +21,12 @@ Types:
 - `docs` — Documentation only
 - `refactor` — Code restructuring without behavior change
 - `test` — Adding or updating tests
-- `chore` — Maintenance, tooling, CI, dependencies
+- `perf` — Performance improvement
+- `style` — Formatting, whitespace (no logic change)
+- `ci` — CI configuration changes
+- `build` — Build system or external dependencies
+- `revert` — Revert a previous commit
+- `chore` — Maintenance, tooling, dependencies
 
 Examples:
 
