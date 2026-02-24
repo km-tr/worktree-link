@@ -8,6 +8,8 @@ This repository uses squash merge. The PR title becomes the final commit message
 
 ### Title format
 
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
 ```
 <type>: <description>
 ```
