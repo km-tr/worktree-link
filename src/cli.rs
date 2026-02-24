@@ -5,12 +5,14 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(name = "worktree-link", version, about)]
 pub struct Cli {
-    /// Source directory (main worktree)
-    pub source: PathBuf,
+    /// Source directory (main worktree).
+    /// Auto-detected via `git worktree list` if omitted.
+    #[arg(short, long)]
+    pub source: Option<PathBuf>,
 
-    /// Target directory (new worktree)
-    #[arg(default_value = ".")]
-    pub target: PathBuf,
+    /// Target directory (new worktree) [default: current directory]
+    #[arg(short, long)]
+    pub target: Option<PathBuf>,
 
     /// Path to config file [default: <SOURCE>/.worktreelinks]
     #[arg(short, long = "config")]

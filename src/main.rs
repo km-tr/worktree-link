@@ -1,6 +1,5 @@
 mod cli;
 mod config;
-#[allow(dead_code)] // TODO: remove once detect_main_worktree is wired into CLI
 mod git;
 mod linker;
 mod walker;
@@ -9,6 +8,7 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use colored::Colorize;
 use std::fs;
+use std::path::PathBuf;
 
 use cli::Cli;
 use config::Config;
@@ -26,21 +26,27 @@ fn main() -> Result<()> {
         .without_time()
         .init();
 
-    // Resolve source directory
-    let source = fs::canonicalize(&cli.source)
-        .with_context(|| format!("Source directory does not exist: {}", cli.source.display()))?;
-
-    if !source.is_dir() {
-        bail!("Source is not a directory: {}", source.display());
-    }
-
     // Resolve target directory
-    let target = fs::canonicalize(&cli.target)
-        .with_context(|| format!("Target directory does not exist: {}", cli.target.display()))?;
+    let target_raw = cli.target.unwrap_or_else(|| PathBuf::from("."));
+    let target = fs::canonicalize(&target_raw)
+        .with_context(|| format!("Target directory does not exist: {}", target_raw.display()))?;
 
     if !target.is_dir() {
         bail!("Target is not a directory: {}", target.display());
     }
+
+    // Resolve source directory
+    let source = match cli.source {
+        Some(s) => {
+            let resolved = fs::canonicalize(&s)
+                .with_context(|| format!("Source directory does not exist: {}", s.display()))?;
+            if !resolved.is_dir() {
+                bail!("Source is not a directory: {}", resolved.display());
+            }
+            resolved
+        }
+        None => git::detect_main_worktree()?,
+    };
 
     if source == target {
         bail!("Source and target cannot be the same directory");
