@@ -8,7 +8,7 @@ pub struct Cli {
     /// Source directory (main worktree)
     pub source: PathBuf,
 
-    /// Target directory (new worktree) [default: current directory]
+    /// Target directory (new worktree)
     #[arg(default_value = ".")]
     pub target: PathBuf,
 

@@ -17,6 +17,8 @@ impl Config {
     }
 
     /// Parse the content of a `.worktreelinks` file.
+    /// Lines starting with `#` are comments. Inline `#` is not stripped
+    /// and is treated as part of the pattern (matching `.gitignore` semantics).
     fn parse(content: &str) -> Self {
         let patterns = content
             .lines()
