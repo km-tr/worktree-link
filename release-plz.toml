@@ -1,0 +1,11 @@
+[workspace]
+# Let cargo-dist handle GitHub Releases (with binary artifacts).
+git_release_enable = false
+
+# Don't publish to crates.io (distributed via cargo-dist binaries).
+publish = false
+
+# Not a library; semver checking is not relevant.
+semver_check = false
+
+pr_labels = ["release"]
