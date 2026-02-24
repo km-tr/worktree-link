@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/km-tr/worktree-link/compare/v0.1.1...v0.1.2) - 2026-02-24
+
+### Added
+
+- make source optional with --source/-s and --target/-t flags ([#8](https://github.com/km-tr/worktree-link/pull/8))
+
 ## [0.1.1](https://github.com/km-tr/worktree-link/compare/v0.1.0...v0.1.1) - 2026-02-24
 
 ### Added
