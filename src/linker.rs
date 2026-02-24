@@ -255,7 +255,7 @@ fn walk_symlinks(dir: &Path, visitor: &mut dyn FnMut(PathBuf) -> Result<()>) -> 
             visitor(path)?;
         } else if meta.is_dir() {
             // Skip .git to avoid damaging repository internals.
-            if path.file_name().map_or(false, |n| n == ".git") {
+            if path.file_name().is_some_and(|n| n == ".git") {
                 continue;
             }
             walk_symlinks(&path, visitor)?;
