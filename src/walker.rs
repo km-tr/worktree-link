@@ -186,6 +186,28 @@ mod tests {
     }
 
     #[test]
+    fn collect_targets_no_ignore_includes_all() {
+        let dir = git_tempdir("collect_noignore");
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(dir.join("src/app.js"), "").unwrap();
+        fs::create_dir_all(dir.join("dist")).unwrap();
+        fs::write(dir.join("dist/bundle.js"), "").unwrap();
+        fs::write(dir.join(".gitignore"), "dist/\n").unwrap();
+
+        // With no_ignore=true, gitignore is completely disabled
+        let targets = collect_targets(&dir, &["**/*.js".into()], true).unwrap();
+        let rel: Vec<_> = targets
+            .iter()
+            .map(|p| p.strip_prefix(&dir).unwrap())
+            .collect();
+        // Both files should be included regardless of .gitignore
+        assert_eq!(
+            rel,
+            vec![Path::new("dist/bundle.js"), Path::new("src/app.js")]
+        );
+    }
+
+    #[test]
     fn collect_targets_worktreelinks_overrides_gitignore() {
         let dir = git_tempdir("collect_override");
         fs::write(dir.join(".env"), "SECRET=1").unwrap();
