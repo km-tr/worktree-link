@@ -3,6 +3,7 @@ name = "worktree-link"
 version = "0.1.0"
 edition = "2021"
 description = "Automatically create symlinks from a main worktree to a new worktree based on .worktreelinks patterns"
+license = "MIT"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
