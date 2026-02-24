@@ -186,6 +186,11 @@ pub fn unlink_targets(
             }
         };
 
+        // Canonicalize the resolved path to handle `..` segments correctly.
+        // fs::canonicalize may fail for broken (dangling) symlinks, so we
+        // fall back to the non-canonicalized path in that case.
+        let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
+
         // Only remove symlinks that point into the source directory
         if !resolved.starts_with(source_dir) {
             return Ok(());
