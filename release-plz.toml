@@ -5,6 +5,9 @@ git_release_enable = false
 # Don't publish to crates.io (distributed via cargo-dist binaries).
 publish = false
 
+# Determine versions from git tags, not the cargo registry.
+git_only = true
+
 # Not a library; semver checking is not relevant.
 semver_check = false
 
