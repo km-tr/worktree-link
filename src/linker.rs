@@ -86,6 +86,12 @@ pub fn create_link(
     force: bool,
     dry_run: bool,
 ) -> Result<LinkAction> {
+    anyhow::ensure!(
+        source_path.is_absolute(),
+        "source_path must be absolute: {}",
+        source_path.display()
+    );
+
     debug!(
         "create_link: {} -> {}",
         target_path.display(),
@@ -205,8 +211,9 @@ pub fn unlink_targets(
 
         // Canonicalize the resolved path to handle `..` segments correctly.
         // fs::canonicalize may fail for broken (dangling) symlinks, so we
-        // fall back to the non-canonicalized path in that case.
-        let resolved = fs::canonicalize(&resolved).unwrap_or(resolved);
+        // fall back to lexical normalization in that case.
+        let resolved =
+            fs::canonicalize(&resolved).unwrap_or_else(|_| normalize_lexically(&resolved));
 
         // Only remove symlinks that point into the source directory
         if !resolved.starts_with(&canonical_source) {
@@ -285,6 +292,26 @@ fn walk_symlinks(dir: &Path, visitor: &mut dyn FnMut(PathBuf) -> Result<()>) -> 
     }
 
     Ok(())
+}
+
+/// Normalize a path lexically by resolving `.` and `..` components without
+/// touching the filesystem. Useful as a fallback when `fs::canonicalize` fails
+/// (e.g. for dangling symlinks).
+fn normalize_lexically(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut parts = Vec::new();
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                if !parts.is_empty() {
+                    parts.pop();
+                }
+            }
+            Component::CurDir => {}
+            other => parts.push(other),
+        }
+    }
+    parts.iter().collect()
 }
 
 /// Check if any parent component of `path` is a symlink.

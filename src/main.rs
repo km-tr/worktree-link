@@ -1,6 +1,5 @@
 mod cli;
 mod config;
-mod error;
 mod linker;
 mod walker;
 

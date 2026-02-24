@@ -110,6 +110,10 @@ Symlinks are created using absolute paths, making them resilient to worktree rel
 - Existing files/symlinks are never overwritten unless `--force` is specified
 - `--unlink` only removes symlinks that point into the source directory
 
+## Platform Support
+
+`worktree-link` uses Unix symlink APIs (`#[cfg(unix)]`). Non-Unix platforms (e.g. native Windows) are not supported. On Windows, use WSL or a similar Unix-like environment.
+
 ## Development
 
 ```bash
