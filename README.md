@@ -1,126 +1,126 @@
 # worktree-link
 
-`git worktree` 作成時に、元のディレクトリから指定ファイル/ディレクトリのシンボリックリンクを自動作成する CLI ツール。
+A CLI tool that automatically creates symlinks from a main git worktree to a new worktree based on glob patterns.
 
-## ユースケース
+## Use Cases
 
-- `node_modules` の共有（巨大な依存を worktree ごとにインストールしない）
-- `.env` / `.env.local` などの環境変数ファイル
-- `.next/` / `tmp/` / `dist/` などのキャッシュ・ビルド成果物
-- IDE 設定ファイル（`.idea/`, `.vscode/`）
+- Share `node_modules` across worktrees (avoid installing dependencies per worktree)
+- Share environment files like `.env` / `.env.local`
+- Share build caches and artifacts like `.next/`, `tmp/`, `dist/`
+- Share IDE settings (`.idea/`, `.vscode/`)
 
-## インストール
+## Installation
 
 ```bash
 cargo install --path .
 ```
 
-## 使い方
+## Usage
 
 ```
 worktree-link [OPTIONS] <SOURCE> [TARGET]
 ```
 
-### 引数
+### Arguments
 
-| 引数 | 説明 | デフォルト |
-|------|------|-----------|
-| `SOURCE` | リンク元ディレクトリ（メインの worktree） | 必須 |
-| `TARGET` | リンク先ディレクトリ（新しい worktree） | `.`（カレントディレクトリ） |
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `SOURCE` | Source directory (main worktree) | Required |
+| `TARGET` | Target directory (new worktree) | `.` (current directory) |
 
-### オプション
+### Options
 
-| オプション | 説明 | デフォルト |
-|-----------|------|-----------|
-| `-c, --config <FILE>` | 設定ファイルのパス | `<SOURCE>/.worktreelinks` |
-| `-n, --dry-run` | 実行せずにリンク作成予定を表示 | `false` |
-| `-f, --force` | 既存のファイル/リンクを上書き | `false` |
-| `-v, --verbose` | 詳細ログ出力 | `false` |
-| `--unlink` | 作成済みシンボリックリンクを解除 | `false` |
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-c, --config <FILE>` | Path to config file | `<SOURCE>/.worktreelinks` |
+| `-n, --dry-run` | Show what would be done without making changes | `false` |
+| `-f, --force` | Overwrite existing files/symlinks | `false` |
+| `-v, --verbose` | Enable verbose logging | `false` |
+| `--unlink` | Remove symlinks previously created by worktree-link | `false` |
 
-### 使用例
+### Examples
 
 ```bash
-# メイン worktree から現在のディレクトリにリンク作成
+# Create symlinks from main worktree to the current directory
 worktree-link /path/to/main
 
-# 対象ディレクトリを指定
+# Specify the target directory explicitly
 worktree-link /path/to/main ./feature-branch
 
-# dry-run で確認してからリンク作成
+# Preview with dry-run before creating links
 worktree-link --dry-run /path/to/main
 worktree-link /path/to/main
 
-# 既存ファイルを上書きしてリンク作成
+# Overwrite existing files/symlinks
 worktree-link --force /path/to/main
 
-# リンク解除
+# Remove previously created symlinks
 worktree-link --unlink /path/to/main
 ```
 
-## 設定ファイル (`.worktreelinks`)
+## Configuration (`.worktreelinks`)
 
-プロジェクトルートに `.worktreelinks` ファイルを作成し、リンクしたいファイル/ディレクトリを gitignore 互換の glob パターンで記述します。
+Create a `.worktreelinks` file in your project root and list the files/directories to link using gitignore-compatible glob patterns.
 
 ```gitignore
-# 依存・パッケージ
+# Dependencies
 node_modules
 
-# 環境変数
+# Environment variables
 .env
 .env.*
 
-# ビルド成果物・キャッシュ
+# Build artifacts and caches
 .next/
 tmp/
 dist/
 
-# IDE
+# IDE settings
 .idea/
 .vscode/settings.json
 
-# 特定のパターン
+# Monorepo packages
 packages/*/node_modules
 ```
 
-### パターンルール
+### Pattern Rules
 
-- `#` で始まる行はコメント
-- 空行は無視
-- `/` で終わるパターンはディレクトリのみマッチ
-- `*` は `/` を除く任意の文字にマッチ
-- `**` はディレクトリを跨いでマッチ
-- `!` で始まるパターンは除外（否定パターン）
+- Lines starting with `#` are comments
+- Blank lines are ignored
+- Patterns ending with `/` match directories only
+- `*` matches any character except `/`
+- `**` matches across directory boundaries
+- Patterns starting with `!` are negation (exclusion) patterns
 
-## 動作の詳細
+## Behavior
 
-### ディレクトリリンク
+### Directory Linking
 
-`node_modules` のようなディレクトリにマッチした場合、ディレクトリ自体をシンボリックリンクとして作成します（中のファイルを個別にリンクしません）。
+When a pattern matches a directory (e.g. `node_modules`), the entire directory is symlinked as a single unit rather than linking individual files inside it.
 
-### 絶対パス
+### Absolute Paths
 
-シンボリックリンクは絶対パスで作成されます。worktree の場所が移動しても壊れにくくなっています。
+Symlinks are created using absolute paths, making them resilient to worktree relocation.
 
-### 安全性
+### Safety
 
-- `.git/` ディレクトリは常に除外されます
-- `--force` を指定しない限り、既存のファイル/リンクは上書きしません
-- `--unlink` はリンク先が SOURCE 配下を指すシンボリックリンクのみ解除します
+- The `.git/` directory is always excluded
+- Existing files/symlinks are never overwritten unless `--force` is specified
+- `--unlink` only removes symlinks that point into the source directory
 
-## 開発
+## Development
 
 ```bash
-# ビルド
+# Build
 cargo build
 
-# テスト
+# Test
 cargo test
 
-# デバッグ実行
+# Debug run
 cargo run -- --dry-run /path/to/source /path/to/target
 ```
 
-## ライセンス
+## License
 
 MIT
