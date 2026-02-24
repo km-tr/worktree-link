@@ -96,7 +96,7 @@ fn main() -> Result<()> {
             return Ok(());
         }
 
-        let targets = walker::collect_targets(&source, &config.patterns)?;
+        let targets = walker::collect_targets(&source, &config.patterns, false)?;
 
         if targets.is_empty() {
             println!(

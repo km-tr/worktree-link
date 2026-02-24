@@ -20,8 +20,14 @@ pub fn build_overrides(source: &Path, patterns: &[String]) -> Result<Override> {
 ///
 /// Patterns follow gitignore syntax. When a directory matches, we include it
 /// but do NOT descend into it — it will be symlinked as a whole.
-pub fn collect_targets(source: &Path, patterns: &[String]) -> Result<Vec<PathBuf>> {
-    let overrides = Arc::new(build_overrides(source, patterns)?);
+pub fn collect_targets(
+    source: &Path,
+    patterns: &[String],
+    no_ignore: bool,
+) -> Result<Vec<PathBuf>> {
+    let overrides = build_overrides(source, patterns)?;
+    let walker_overrides = overrides.clone();
+    let overrides = Arc::new(overrides);
 
     let mut targets: Vec<PathBuf> = Vec::new();
 
@@ -38,9 +44,10 @@ pub fn collect_targets(source: &Path, patterns: &[String]) -> Result<Vec<PathBuf
 
     let walker = WalkBuilder::new(source)
         .hidden(false)
-        .git_ignore(false)
-        .git_global(false)
-        .git_exclude(false)
+        .git_ignore(!no_ignore)
+        .git_global(!no_ignore)
+        .git_exclude(!no_ignore)
+        .overrides(walker_overrides)
         .filter_entry(move |entry| {
             // Always skip .git
             if entry.file_name() == ".git" {
@@ -113,7 +120,7 @@ mod tests {
         fs::create_dir_all(dir.join("src")).unwrap();
         fs::write(dir.join("src/lib.rs"), "").unwrap();
 
-        let targets = collect_targets(&dir, &[".env".into()]).unwrap();
+        let targets = collect_targets(&dir, &[".env".into()], true).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
@@ -129,7 +136,7 @@ mod tests {
         fs::write(nm.join("index.js"), "").unwrap();
         fs::write(dir.join("app.js"), "").unwrap();
 
-        let targets = collect_targets(&dir, &["node_modules".into()]).unwrap();
+        let targets = collect_targets(&dir, &["node_modules".into()], true).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
@@ -148,6 +155,7 @@ mod tests {
         let targets = collect_targets(
             &dir,
             &[".env".into(), ".env.*".into(), "!.env.production".into()],
+            true,
         )
         .unwrap();
         let rel: Vec<_> = targets
@@ -155,6 +163,40 @@ mod tests {
             .map(|p| p.strip_prefix(&dir).unwrap())
             .collect();
         assert_eq!(rel, vec![Path::new(".env"), Path::new(".env.local")]);
+    }
+
+    #[test]
+    fn collect_targets_respects_gitignore() {
+        let dir = git_tempdir("collect_gitignore");
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(dir.join("src/app.js"), "").unwrap();
+        fs::create_dir_all(dir.join("dist")).unwrap();
+        fs::write(dir.join("dist/bundle.js"), "").unwrap();
+        fs::write(dir.join(".gitignore"), "dist/\n").unwrap();
+
+        // Pattern matches both src/app.js and dist/bundle.js,
+        // but dist/ is gitignored and not in .worktreelinks patterns for the directory itself
+        let targets = collect_targets(&dir, &["src".into()], false).unwrap();
+        let rel: Vec<_> = targets
+            .iter()
+            .map(|p| p.strip_prefix(&dir).unwrap())
+            .collect();
+        // dist/ should be excluded because it's gitignored and not overridden
+        assert_eq!(rel, vec![Path::new("src")]);
+    }
+
+    fn git_tempdir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("worktree-link-test-{name}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        // Initialize git repo so the ignore crate recognizes .gitignore
+        std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(&dir)
+            .status()
+            .expect("git init failed");
+        // Return canonical path so comparisons work
+        fs::canonicalize(&dir).unwrap()
     }
 
     fn tempdir(name: &str) -> PathBuf {
