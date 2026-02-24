@@ -1,5 +1,7 @@
 mod cli;
 mod config;
+#[allow(dead_code)] // TODO: remove once detect_main_worktree is wired into CLI
+mod git;
 mod linker;
 mod walker;
 
