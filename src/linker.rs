@@ -123,6 +123,16 @@ pub fn create_link(
         });
     }
 
+    // Guard: if any parent of target_path is a symlink, creating a link
+    // underneath it would write into the symlink destination instead of
+    // the target worktree.
+    if has_symlink_parent(target_path) {
+        return Ok(LinkAction::Skipped {
+            target: target_path.to_path_buf(),
+            reason: "parent directory is a symlink (remove it first)".into(),
+        });
+    }
+
     if !dry_run {
         create_parent_dirs(target_path)?;
         symlink(source_path, target_path)?;
@@ -244,6 +254,10 @@ fn walk_symlinks(dir: &Path, visitor: &mut dyn FnMut(PathBuf) -> Result<()>) -> 
         if meta.file_type().is_symlink() {
             visitor(path)?;
         } else if meta.is_dir() {
+            // Skip .git to avoid damaging repository internals.
+            if path.file_name().map_or(false, |n| n == ".git") {
+                continue;
+            }
             walk_symlinks(&path, visitor)?;
         }
     }
