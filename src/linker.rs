@@ -209,11 +209,10 @@ pub fn unlink_targets(
             }
         };
 
-        // Canonicalize the resolved path to handle `..` segments correctly.
-        // fs::canonicalize may fail for broken (dangling) symlinks, so we
-        // fall back to lexical normalization in that case.
-        let resolved =
-            fs::canonicalize(&resolved).unwrap_or_else(|_| normalize_lexically(&resolved));
+        // Normalize and canonicalize for stable prefix checks.
+        // For dangling symlinks, fully canonicalizing the destination fails, so
+        // we canonicalize the deepest existing ancestor and append the remainder.
+        let resolved = canonicalize_with_ancestor_fallback(&resolved);
 
         // Only remove symlinks that point into the source directory
         if !resolved.starts_with(&canonical_source) {
@@ -314,6 +313,39 @@ fn normalize_lexically(path: &Path) -> PathBuf {
     parts.iter().collect()
 }
 
+/// Canonicalize a path for prefix comparisons.
+///
+/// If the full path cannot be canonicalized (e.g. dangling symlink target),
+/// canonicalize the deepest existing ancestor and append the remaining suffix.
+/// This avoids mismatches such as `/var` vs `/private/var` aliases on macOS.
+fn canonicalize_with_ancestor_fallback(path: &Path) -> PathBuf {
+    let normalized = normalize_lexically(path);
+    if let Ok(canonical) = fs::canonicalize(&normalized) {
+        return canonical;
+    }
+
+    for ancestor in normalized.ancestors() {
+        if ancestor.as_os_str().is_empty() {
+            continue;
+        }
+
+        let Ok(canonical_ancestor) = fs::canonicalize(ancestor) else {
+            continue;
+        };
+        let Ok(remainder) = normalized.strip_prefix(ancestor) else {
+            continue;
+        };
+
+        return if remainder.as_os_str().is_empty() {
+            canonical_ancestor
+        } else {
+            canonical_ancestor.join(remainder)
+        };
+    }
+
+    normalized
+}
+
 /// Check if any parent component of `path` is a symlink.
 fn has_symlink_parent(path: &Path) -> bool {
     let mut current = path.to_path_buf();
@@ -361,4 +393,39 @@ fn symlink(source: &Path, target: &Path) -> Result<()> {
 #[cfg(not(unix))]
 fn symlink(source: &Path, target: &Path) -> Result<()> {
     anyhow::bail!("Symlink creation is only supported on Unix systems")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir() -> PathBuf {
+        let mut dir = std::env::temp_dir();
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before UNIX_EPOCH")
+            .as_nanos();
+        dir.push(format!("worktree-link-test-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&dir).expect("failed to create test temp dir");
+        dir
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn canonicalize_with_ancestor_fallback_resolves_alias_for_dangling_path() {
+        let root = unique_temp_dir();
+        let real = root.join("real");
+        fs::create_dir_all(&real).expect("failed to create real dir");
+
+        let alias = root.join("alias");
+        std::os::unix::fs::symlink(&real, &alias).expect("failed to create alias symlink");
+
+        let dangling = alias.join("missing").join("child");
+        let resolved = canonicalize_with_ancestor_fallback(&dangling);
+        let canonical_real = fs::canonicalize(&real).expect("failed to canonicalize real dir");
+        assert_eq!(resolved, canonical_real.join("missing").join("child"));
+
+        fs::remove_dir_all(&root).expect("failed to cleanup temp dir");
+    }
 }
