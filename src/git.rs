@@ -112,6 +112,35 @@ mod tests {
         );
     }
 
+    #[test]
+    fn parse_main_worktree_extracts_first_entry() {
+        let dir = git_tempdir("parse_first");
+        Command::new("git")
+            .args(["commit", "--allow-empty", "-m", "init"])
+            .current_dir(&dir)
+            .output()
+            .unwrap();
+
+        // Get raw porcelain output
+        let output = Command::new("git")
+            .args(["worktree", "list", "--porcelain"])
+            .current_dir(&dir)
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        // Verify first line has correct format
+        let first_line = stdout.lines().next().unwrap();
+        assert!(first_line.starts_with("worktree "));
+        let parsed_path = PathBuf::from(first_line.strip_prefix("worktree ").unwrap());
+        assert_eq!(
+            fs::canonicalize(&parsed_path).unwrap(),
+            fs::canonicalize(&dir).unwrap()
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     fn git_tempdir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("worktree-link-test-{name}"));
         let _ = fs::remove_dir_all(&dir);
