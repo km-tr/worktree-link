@@ -129,6 +129,8 @@ Symlinks are created using absolute paths, making them resilient to worktree rel
 
 `worktree-link` uses Unix symlink APIs (`#[cfg(unix)]`). Non-Unix platforms (e.g. native Windows) are not supported. On Windows, use WSL or a similar Unix-like environment.
 
+Currently only tested on macOS. Linux should work but is not regularly tested.
+
 ## Development
 
 ```bash
