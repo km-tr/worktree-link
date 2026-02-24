@@ -26,24 +26,16 @@ fn main() -> Result<()> {
         .init();
 
     // Resolve source directory
-    let source = fs::canonicalize(&cli.source).with_context(|| {
-        format!(
-            "Source directory does not exist: {}",
-            cli.source.display()
-        )
-    })?;
+    let source = fs::canonicalize(&cli.source)
+        .with_context(|| format!("Source directory does not exist: {}", cli.source.display()))?;
 
     if !source.is_dir() {
         bail!("Source is not a directory: {}", source.display());
     }
 
     // Resolve target directory
-    let target = fs::canonicalize(&cli.target).with_context(|| {
-        format!(
-            "Target directory does not exist: {}",
-            cli.target.display()
-        )
-    })?;
+    let target = fs::canonicalize(&cli.target)
+        .with_context(|| format!("Target directory does not exist: {}", cli.target.display()))?;
 
     if !target.is_dir() {
         bail!("Target is not a directory: {}", target.display());
@@ -131,8 +123,7 @@ fn main() -> Result<()> {
                 .with_context(|| "Path is not relative to source")?;
             let target_path = target.join(rel);
 
-            let action =
-                linker::create_link(source_path, &target_path, cli.force, cli.dry_run)?;
+            let action = linker::create_link(source_path, &target_path, cli.force, cli.dry_run)?;
 
             println!("  {action}");
             match action {

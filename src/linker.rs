@@ -222,8 +222,13 @@ fn remove_entry(path: &Path) -> Result<()> {
 
 #[cfg(unix)]
 fn symlink(source: &Path, target: &Path) -> Result<()> {
-    std::os::unix::fs::symlink(source, target)
-        .with_context(|| format!("Failed to create symlink: {} -> {}", target.display(), source.display()))
+    std::os::unix::fs::symlink(source, target).with_context(|| {
+        format!(
+            "Failed to create symlink: {} -> {}",
+            target.display(),
+            source.display()
+        )
+    })
 }
 
 #[cfg(not(unix))]

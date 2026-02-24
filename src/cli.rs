@@ -32,4 +32,3 @@ pub struct Cli {
     #[arg(long)]
     pub unlink: bool,
 }
-

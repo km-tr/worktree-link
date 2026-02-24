@@ -59,10 +59,7 @@ pub fn collect_targets(source: &Path, patterns: &[String]) -> Result<Vec<PathBuf
             if is_dir {
                 if let Match::Whitelist(_) = overrides_clone.matched(path, true) {
                     // This directory matches — record it and stop descent
-                    matched_dirs_clone
-                        .lock()
-                        .unwrap()
-                        .push(path.to_path_buf());
+                    matched_dirs_clone.lock().unwrap().push(path.to_path_buf());
                     return false;
                 }
             }
