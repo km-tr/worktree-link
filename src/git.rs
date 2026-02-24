@@ -115,11 +115,12 @@ mod tests {
     #[test]
     fn parse_main_worktree_extracts_first_entry() {
         let dir = git_tempdir("parse_first");
-        Command::new("git")
+        let commit = Command::new("git")
             .args(["commit", "--allow-empty", "-m", "init"])
             .current_dir(&dir)
             .output()
             .unwrap();
+        assert!(commit.status.success(), "git commit failed");
 
         // Get raw porcelain output
         let output = Command::new("git")
@@ -129,14 +130,9 @@ mod tests {
             .unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
 
-        // Verify first line has correct format
-        let first_line = stdout.lines().next().unwrap();
-        assert!(first_line.starts_with("worktree "));
-        let parsed_path = PathBuf::from(first_line.strip_prefix("worktree ").unwrap());
-        assert_eq!(
-            fs::canonicalize(&parsed_path).unwrap(),
-            fs::canonicalize(&dir).unwrap()
-        );
+        // Delegate to the function under test
+        let parsed = parse_main_worktree(&stdout).unwrap();
+        assert_eq!(parsed, dir);
 
         let _ = fs::remove_dir_all(&dir);
     }

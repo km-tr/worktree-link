@@ -51,7 +51,7 @@ wtl [OPTIONS]
 | `-f, --force` | Overwrite existing files/symlinks | `false` |
 | `-v, --verbose` | Enable verbose logging | `false` |
 | `--unlink` | Remove symlinks previously created by worktree-link | `false` |
-| `--no-ignore` | Don't respect .gitignore rules | `false` |
+| `--no-ignore` | Do not respect .gitignore rules | `false` |
 
 ### Examples
 
