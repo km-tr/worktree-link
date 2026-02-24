@@ -74,7 +74,11 @@ impl std::fmt::Display for UnlinkAction {
 
 /// Create a symlink from `source_path` to `target_path`.
 ///
-/// `source_path` is the file/dir that already exists (in the main worktree).
+/// `source_path` must be an absolute path (under the canonical source root).
+/// We intentionally do NOT call `fs::canonicalize` on it so that symlinks
+/// within the source tree are preserved as-is, keeping the link/unlink
+/// round-trip consistent.
+///
 /// `target_path` is where the symlink will be created (in the new worktree).
 pub fn create_link(
     source_path: &Path,
@@ -82,13 +86,10 @@ pub fn create_link(
     force: bool,
     dry_run: bool,
 ) -> Result<LinkAction> {
-    let source_abs = fs::canonicalize(source_path)
-        .with_context(|| format!("Cannot resolve source path: {}", source_path.display()))?;
-
     debug!(
         "create_link: {} -> {}",
         target_path.display(),
-        source_abs.display()
+        source_path.display()
     );
 
     if target_path.exists() || target_path.is_symlink() {
@@ -102,79 +103,103 @@ pub fn create_link(
         if !dry_run {
             remove_entry(target_path)
                 .with_context(|| format!("Failed to remove: {}", target_path.display()))?;
-        }
-
-        if !dry_run {
             create_parent_dirs(target_path)?;
-            symlink(&source_abs, target_path)?;
+            symlink(source_path, target_path)?;
         }
 
         info!("overwritten: {}", target_path.display());
         return Ok(LinkAction::Overwritten {
-            source: source_abs,
+            source: source_path.to_path_buf(),
             target: target_path.to_path_buf(),
         });
     }
 
     if !dry_run {
         create_parent_dirs(target_path)?;
-        symlink(&source_abs, target_path)?;
+        symlink(source_path, target_path)?;
     }
 
     info!("linked: {}", target_path.display());
     Ok(LinkAction::Created {
-        source: source_abs,
+        source: source_path.to_path_buf(),
         target: target_path.to_path_buf(),
     })
 }
 
-/// Remove symlinks in `target_dir` that point into `source_dir` and match the given patterns.
+/// Walk `target_dir` and remove any symlinks that point into `source_dir`.
+///
+/// This walks the target side (not the source), so it also catches stale
+/// symlinks whose source-side originals have been deleted or renamed.
 pub fn unlink_targets(
     source_dir: &Path,
     target_dir: &Path,
-    matched_targets: &[PathBuf],
     dry_run: bool,
 ) -> Result<Vec<UnlinkAction>> {
-    let source_abs = fs::canonicalize(source_dir)
-        .with_context(|| format!("Cannot resolve source path: {}", source_dir.display()))?;
-
     let mut actions = Vec::new();
 
-    for source_path in matched_targets {
-        let rel = source_path
-            .strip_prefix(source_dir)
-            .with_context(|| "Path is not relative to source")?;
-        let target_path = target_dir.join(rel);
-
-        if !target_path.is_symlink() {
-            actions.push(UnlinkAction::Skipped {
-                target: target_path,
-                reason: "not a symlink".into(),
-            });
-            continue;
+    walk_symlinks(target_dir, &mut |entry_path| {
+        if !entry_path.is_symlink() {
+            return Ok(());
         }
 
-        // Verify the symlink points into the source directory
-        let link_dest = fs::read_link(&target_path)
-            .with_context(|| format!("Failed to read symlink: {}", target_path.display()))?;
-        if !link_dest.starts_with(&source_abs) {
+        let link_dest = fs::read_link(&entry_path)
+            .with_context(|| format!("Failed to read symlink: {}", entry_path.display()))?;
+
+        // Only remove symlinks that point into the source directory
+        if !link_dest.starts_with(source_dir) {
             actions.push(UnlinkAction::Skipped {
-                target: target_path,
+                target: entry_path.clone(),
                 reason: format!("points to {} (not in source)", link_dest.display()),
             });
-            continue;
+            return Ok(());
         }
 
         if !dry_run {
-            remove_entry(&target_path)
-                .with_context(|| format!("Failed to remove symlink: {}", target_path.display()))?;
+            remove_entry(&entry_path)
+                .with_context(|| format!("Failed to remove symlink: {}", entry_path.display()))?;
         }
 
-        info!("unlinked: {}", target_path.display());
-        actions.push(UnlinkAction::Removed(target_path));
-    }
+        info!("unlinked: {}", entry_path.display());
+        actions.push(UnlinkAction::Removed(entry_path));
+        Ok(())
+    })?;
+
+    actions.sort_by(|a, b| {
+        let path_a = match a {
+            UnlinkAction::Removed(p) | UnlinkAction::Skipped { target: p, .. } => p,
+        };
+        let path_b = match b {
+            UnlinkAction::Removed(p) | UnlinkAction::Skipped { target: p, .. } => p,
+        };
+        path_a.cmp(path_b)
+    });
 
     Ok(actions)
+}
+
+/// Recursively walk a directory, calling `visitor` on each symlink found.
+/// Does not follow symlinks (so symlinked directories are visited but not descended into).
+fn walk_symlinks(dir: &Path, visitor: &mut dyn FnMut(PathBuf) -> Result<()>) -> Result<()> {
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e).with_context(|| format!("Failed to read dir: {}", dir.display())),
+    };
+
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        let meta = fs::symlink_metadata(&path)
+            .with_context(|| format!("Failed to stat: {}", path.display()))?;
+
+        if meta.file_type().is_symlink() {
+            visitor(path)?;
+        } else if meta.is_dir() {
+            walk_symlinks(&path, visitor)?;
+        }
+    }
+
+    Ok(())
 }
 
 fn create_parent_dirs(path: &Path) -> Result<()> {

@@ -53,6 +53,10 @@ fn main() -> Result<()> {
         bail!("Source and target cannot be the same directory");
     }
 
+    if target.starts_with(&source) || source.starts_with(&target) {
+        bail!("Source and target must not be nested");
+    }
+
     // Read config
     let config_path = cli
         .config
@@ -73,30 +77,10 @@ fn main() -> Result<()> {
         println!("{}", "DRY RUN — no changes will be made".cyan().bold());
     }
 
-    // Collect matching files/directories from source
-    let matched = walker::collect_targets(&source, &config.patterns)?;
-    let targets = walker::collapse_directories(matched);
-
-    if targets.is_empty() {
-        println!(
-            "{} No files matched the patterns in {}",
-            "WARN".yellow().bold(),
-            config_path.display()
-        );
-        return Ok(());
-    }
-
-    if cli.verbose {
-        println!(
-            "Found {} target(s) to {}",
-            targets.len(),
-            if cli.unlink { "unlink" } else { "link" }
-        );
-    }
-
     if cli.unlink {
-        // Unlink mode
-        let actions = linker::unlink_targets(&source, &target, &targets, cli.dry_run)?;
+        // Unlink mode: walk the target directory looking for symlinks into source.
+        // This catches stale symlinks even if the source-side file was deleted.
+        let actions = linker::unlink_targets(&source, &target, cli.dry_run)?;
 
         let mut removed = 0;
         let mut skipped = 0;
@@ -108,13 +92,35 @@ fn main() -> Result<()> {
             }
         }
 
+        if actions.is_empty() {
+            println!(
+                "  {} No symlinks pointing to source found",
+                "INFO".cyan().bold()
+            );
+        }
+
         println!();
         println!(
             "{}",
             format!("Removed: {removed}, Skipped: {skipped}").bold()
         );
     } else {
-        // Link mode
+        // Link mode: collect matching files/directories from source
+        let targets = walker::collect_targets(&source, &config.patterns)?;
+
+        if targets.is_empty() {
+            println!(
+                "{} No files matched the patterns in {}",
+                "WARN".yellow().bold(),
+                config_path.display()
+            );
+            return Ok(());
+        }
+
+        if cli.verbose {
+            println!("Found {} target(s) to link", targets.len());
+        }
+
         let mut created = 0;
         let mut overwritten = 0;
         let mut skipped = 0;
