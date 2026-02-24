@@ -44,6 +44,7 @@ pub fn collect_targets(
 
     let walker = WalkBuilder::new(source)
         .hidden(false)
+        .ignore(!no_ignore)
         .git_ignore(!no_ignore)
         .git_global(!no_ignore)
         .git_exclude(!no_ignore)
@@ -174,15 +175,15 @@ mod tests {
         fs::write(dir.join("dist/bundle.js"), "").unwrap();
         fs::write(dir.join(".gitignore"), "dist/\n").unwrap();
 
-        // Pattern matches both src/app.js and dist/bundle.js,
-        // but dist/ is gitignored and not in .worktreelinks patterns for the directory itself
-        let targets = collect_targets(&dir, &["src".into()], false).unwrap();
+        // Glob pattern matches files in both dirs, but dist/ is gitignored.
+        // The override **/*.js doesn't match directory dist/ itself,
+        // so gitignore applies and the walker skips the directory entirely.
+        let targets = collect_targets(&dir, &["**/*.js".into()], false).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
             .collect();
-        // dist/ should be excluded because it's gitignored and not overridden
-        assert_eq!(rel, vec![Path::new("src")]);
+        assert_eq!(rel, vec![Path::new("src/app.js")]);
     }
 
     #[test]
