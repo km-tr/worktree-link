@@ -230,11 +230,12 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         // Initialize git repo so the ignore crate recognizes .gitignore
-        std::process::Command::new("git")
+        let status = std::process::Command::new("git")
             .args(["init", "--quiet"])
             .current_dir(&dir)
             .status()
             .expect("git init failed");
+        assert!(status.success(), "git init exited with {status}");
         // Return canonical path so comparisons work
         fs::canonicalize(&dir).unwrap()
     }
