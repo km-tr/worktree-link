@@ -166,8 +166,12 @@ pub fn unlink_targets(
 ) -> Result<Vec<UnlinkAction>> {
     // Canonicalize source_dir so the starts_with comparison works correctly
     // against fully-resolved link destinations.
-    let canonical_source = fs::canonicalize(source_dir)
-        .with_context(|| format!("Failed to canonicalize source dir: {}", source_dir.display()))?;
+    let canonical_source = fs::canonicalize(source_dir).with_context(|| {
+        format!(
+            "Failed to canonicalize source dir: {}",
+            source_dir.display()
+        )
+    })?;
 
     let mut actions = Vec::new();
 
