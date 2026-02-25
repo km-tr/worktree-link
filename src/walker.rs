@@ -1,3 +1,22 @@
+// ============================================================================
+// walker.rs — パターンマッチによるファイル/ディレクトリの収集
+// ============================================================================
+//
+// このモジュールは `ignore` クレートを使って、ソースディレクトリ内から
+// .worktreelinks のパターンに一致するファイルとディレクトリを収集します。
+//
+// 【ignore クレート】
+// ripgrep の作者が開発した高速なファイル走査ライブラリです。
+// .gitignore のルールを理解し、パフォーマンスに優れています。
+// 「Override」は .gitignore のルールを上書きする仕組みで、
+// 通常は無視されるファイルも強制的にマッチさせることができます。
+//
+// 【重要な設計判断：ディレクトリマッチ時の挙動】
+// ディレクトリがパターンにマッチした場合、そのディレクトリ自体を
+// リンク対象として記録し、中には降りません（ディレクトリごとリンクされるため）。
+// 例: "node_modules" にマッチ → node_modules ディレクトリ全体が1つのリンクになる
+// ============================================================================
+
 use anyhow::{Context, Result};
 use ignore::overrides::{Override, OverrideBuilder};
 use ignore::{Match, WalkBuilder};
@@ -5,7 +24,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::debug;
 
-/// Build an `Override` matcher from the given patterns.
+/// パターン文字列の配列から Override マッチャーを構築します。
+///
+/// 【&[String] — スライス参照】
+/// `&[String]` は String の配列（Vec<String> など）への借用参照です。
+/// Vec でも固定長配列でも受け取れる柔軟な型です。
+/// 関数の引数には Vec<String> より &[String] を使うのが Rust のイディオムです。
 pub fn build_overrides(source: &Path, patterns: &[String]) -> Result<Override> {
     let mut builder = OverrideBuilder::new(source);
     for pattern in patterns {
@@ -16,10 +40,11 @@ pub fn build_overrides(source: &Path, patterns: &[String]) -> Result<Override> {
     builder.build().with_context(|| "Failed to build overrides")
 }
 
-/// Collect files and directories in `source` that match the given patterns.
+/// ソースディレクトリ内でパターンに一致するファイル/ディレクトリを収集します。
 ///
-/// Patterns follow gitignore syntax. When a directory matches, we include it
-/// but do NOT descend into it — it will be symlinked as a whole.
+/// パターンは gitignore 構文に従います。ディレクトリがマッチした場合は
+/// ディレクトリ自体を結果に含めますが、その中には降りません
+/// （ディレクトリ全体がシンボリックリンクされるため）。
 pub fn collect_targets(
     source: &Path,
     patterns: &[String],
@@ -27,14 +52,23 @@ pub fn collect_targets(
 ) -> Result<Vec<PathBuf>> {
     let overrides = build_overrides(source, patterns)?;
     let walker_overrides = overrides.clone();
+    // 【Arc（Atomic Reference Counting）— スレッド安全な参照カウント】
+    // Arc は複数の所有者でデータを共有するためのスマートポインタです。
+    // Rc と似ていますが、Arc はスレッド間で安全に共有できます。
+    // Arc::clone() は実際のデータをコピーせず、参照カウントを増やすだけです。
     let overrides = Arc::new(overrides);
 
     let mut targets: Vec<PathBuf> = Vec::new();
 
-    // We use filter_entry to both skip .git and to prune matched directories
-    // (avoid descending into them). A matched directory is still yielded as
-    // an entry before filter_entry decides not to recurse into it, so we
-    // collect it from filter_entry via a shared Vec.
+    // 【Arc<Mutex<T>> パターン — スレッド間の共有可変データ】
+    // Arc で複数のスレッド/クロージャが同じデータを共有し、
+    // Mutex で排他的アクセス（同時に1つだけが書き込み可能）を保証します。
+    // これは Go のチャネルや Java の synchronized に相当する同期プリミティブです。
+    //
+    // 【なぜ必要？】
+    // filter_entry クロージャ内でマッチしたディレクトリを記録する必要がありますが、
+    // クロージャは walker に move されるため、外部の Vec に直接書き込めません。
+    // Arc<Mutex<Vec>> を使って、クロージャと外部コードの両方からアクセスします。
     let matched_dirs: Arc<std::sync::Mutex<Vec<PathBuf>>> =
         Arc::new(std::sync::Mutex::new(Vec::new()));
 
@@ -42,6 +76,11 @@ pub fn collect_targets(
     let matched_dirs_clone = Arc::clone(&matched_dirs);
     let source_owned = source.to_path_buf();
 
+    // 【WalkBuilder — ファイル走査の設定】
+    // ビルダーパターンでオプションをチェーンし、最後に .build() で完成させます。
+    // - hidden(false)    → 隠しファイルもスキップしない
+    // - git_ignore(...)  → .gitignore のルールに従うかどうか
+    // - overrides(...)   → .worktreelinks のパターンを設定
     let walker = WalkBuilder::new(source)
         .hidden(false)
         .ignore(!no_ignore)
@@ -49,15 +88,19 @@ pub fn collect_targets(
         .git_global(!no_ignore)
         .git_exclude(!no_ignore)
         .overrides(walker_overrides)
+        // 【move クロージャ】
+        // `move` キーワードにより、クロージャが参照する変数の所有権を
+        // クロージャに移動します。これにより、クロージャが関数のスコープを
+        // 超えて生存しても安全になります。
         .filter_entry(move |entry| {
-            // Always skip .git
+            // .git は常にスキップ
             if entry.file_name() == ".git" {
                 return false;
             }
 
             let path = entry.path();
 
-            // Always allow the root itself
+            // ルートディレクトリ自体は常に許可
             if path == source_owned {
                 return true;
             }
@@ -65,8 +108,16 @@ pub fn collect_targets(
             let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
 
             if is_dir {
+                // 【Match::Whitelist — パターンにマッチした場合】
+                // ignore クレートの Match enum は以下のバリアントを持ちます：
+                //   - None       → どのパターンにもマッチしない
+                //   - Whitelist  → 包含パターンにマッチ
+                //   - Ignore     → 除外パターンにマッチ
                 if let Match::Whitelist(_) = overrides_clone.matched(path, true) {
-                    // This directory matches — record it and stop descent
+                    // マッチしたディレクトリを記録し、false を返して中に降りないようにする
+                    // 【.lock().unwrap()】
+                    // Mutex のロックを取得します。.unwrap() は他のスレッドがパニックして
+                    // ロックが「毒された」場合にパニックしますが、ここでは安全です。
                     matched_dirs_clone.lock().unwrap().push(path.to_path_buf());
                     return false;
                 }
@@ -76,32 +127,36 @@ pub fn collect_targets(
         })
         .build();
 
+    // walker はイテレータを実装しているので for ループで使えます
     for entry in walker {
         let entry = entry.with_context(|| "Error walking directory")?;
         let path = entry.path();
 
-        // Skip the source root itself
+        // ソースルート自体はスキップ
         if path == source {
             continue;
         }
 
         let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
 
-        // Files matched by pattern
+        // パターンにマッチしたファイルを収集
         if let Match::Whitelist(_) = overrides.matched(path, is_dir) {
             debug!("matched: {}", path.display());
             targets.push(path.to_path_buf());
         }
     }
 
-    // Add matched directories that were pruned by filter_entry
+    // filter_entry で刈り取られたディレクトリを追加
     let dirs = matched_dirs.lock().unwrap();
     for dir in dirs.iter() {
         debug!("matched dir: {}", dir.display());
         targets.push(dir.clone());
     }
 
-    // Sort for deterministic output
+    // 【sort() と dedup() — 決定的な出力の保証】
+    // ファイルシステムの走査順序は OS やファイルシステムによって異なることがあります。
+    // sort() でパスをアルファベット順にし、dedup() で重複を除去することで、
+    // どの環境でも同じ出力を保証します。
     targets.sort();
     targets.dedup();
 

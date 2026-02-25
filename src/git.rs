@@ -1,13 +1,44 @@
+// ============================================================================
+// git.rs — git worktree のメインワークツリー自動検出
+// ============================================================================
+//
+// ユーザーが --source を省略した場合、`git worktree list --porcelain` コマンドを
+// 実行して、メインワークツリー（最初のエントリ）のパスを自動検出します。
+//
+// 【git worktree とは？】
+// git worktree は1つのリポジトリから複数の作業ディレクトリを作る機能です。
+// 例えば feature ブランチの作業中に別ブランチの修正が必要になった場合、
+// stash せずに別のディレクトリで作業できます。
+//
+// 【--porcelain オプション】
+// git の --porcelain はスクリプトで解析しやすい機械可読な出力形式です。
+// 出力例：
+//   worktree /home/user/repo
+//   HEAD abc1234
+//   branch refs/heads/main
+//   （空行で区切り）
+//   worktree /home/user/repo-feature
+//   HEAD def5678
+//   branch refs/heads/feature
+//
+// 【pub(crate) — クレート内限定公開】
+// `pub` は完全公開、`pub(crate)` はクレート内でのみ公開されます。
+// このモジュール外からでも同じクレート内なら呼べますが、
+// 外部クレートからは呼べません。適切なカプセル化に役立ちます。
+// ============================================================================
+
 use anyhow::{bail, Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Detect the main worktree from a specific directory by running `git worktree list --porcelain`.
-///
-/// The first entry in porcelain output is always the main worktree.
-/// Returns the canonicalized path of the main worktree.
+/// 指定ディレクトリから `git worktree list --porcelain` を実行し、
+/// メインワークツリーのパスを検出します。
 pub(crate) fn detect_main_worktree_in(dir: &Path) -> Result<PathBuf> {
+    // 【std::process::Command — 外部コマンドの実行】
+    // Command::new("git") で git プロセスを起動します。
+    // .args() で引数を、.current_dir() で実行ディレクトリを指定します。
+    // .output() はプロセスの終了を待ち、stdout/stderr/終了コードを返します。
     let output = Command::new("git")
         .args(["worktree", "list", "--porcelain"])
         .current_dir(dir)
@@ -15,6 +46,9 @@ pub(crate) fn detect_main_worktree_in(dir: &Path) -> Result<PathBuf> {
         .context("Failed to run git. Use --source to specify the main worktree path.")?;
 
     if !output.status.success() {
+        // 【String::from_utf8_lossy】
+        // バイト列を UTF-8 文字列に変換します。不正なバイトは
+        // Unicode の置換文字（�）に置き換えられるため、パニックしません。
         let stderr = String::from_utf8_lossy(&output.stderr);
         bail!(
             "Failed to detect main worktree: `git worktree list --porcelain` exited with {}.\nstderr:\n{}\nUse --source to specify the main worktree path.",
@@ -27,9 +61,14 @@ pub(crate) fn detect_main_worktree_in(dir: &Path) -> Result<PathBuf> {
     parse_main_worktree(&stdout)
 }
 
-/// Parse the first worktree path from `git worktree list --porcelain` output.
+/// porcelain 出力を解析して最初の worktree パスを取得します。
+/// 最初のエントリが常にメインワークツリーです。
 fn parse_main_worktree(porcelain_output: &str) -> Result<PathBuf> {
     for line in porcelain_output.lines() {
+        // 【if let — パターンマッチの簡略形】
+        // `if let Some(x) = ...` は match 式の1パターンだけを扱う場合に便利です。
+        // strip_prefix は「指定の接頭辞を取り除いた残り」を Some で返し、
+        // 接頭辞がなければ None を返します。
         if let Some(path_str) = line.strip_prefix("worktree ") {
             let path = PathBuf::from(path_str);
             return fs::canonicalize(&path).with_context(|| {
