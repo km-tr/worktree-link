@@ -1,4 +1,3 @@
 [tools]
 "cargo:cargo-dist" = "0.31.0"
-"cargo:cargo-release" = "1.1.0"
 lefthook = "2.1.1"
