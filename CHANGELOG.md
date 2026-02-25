@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/km-tr/worktree-link/compare/v0.1.2...v0.1.3) - 2026-02-25
+
+### Other
+
+- remove cargo-release from mise.toml ([#12](https://github.com/km-tr/worktree-link/pull/12))
+
 ## [0.1.2](https://github.com/km-tr/worktree-link/compare/v0.1.1...v0.1.2) - 2026-02-24
 
 ### Added
