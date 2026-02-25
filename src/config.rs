@@ -33,7 +33,9 @@ pub struct Config {
 
 // 【impl ブロック】
 // Rust では構造体にメソッドを追加するために `impl` ブロックを使います。
-// Java や Python のクラスメソッドに相当します。
+// Java のクラス定義や Python の class 内メソッドに近い概念ですが、
+// Rust では `self` を取る「メソッド」と、取らない「関連関数」（例: Config::parse()）
+// の2種類があり、後者はコンストラクタ的な用途でよく使われます。
 impl Config {
     /// 指定パスの `.worktreelinks` ファイルを読み込んで Config を生成します。
     ///

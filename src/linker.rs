@@ -31,7 +31,7 @@ use tracing::{debug, info, warn};
 //
 // 【構造体バリアント vs タプルバリアント】
 // `Created { source, target }` は名前付きフィールド（構造体バリアント）、
-// `Removed(PathBuf)` は位置指定フィールド（タプルバリアント）です。
+// 下の `UnlinkAction::Removed(PathBuf)` は位置指定フィールド（タプルバリアント）です。
 // フィールドが1つだけの場合はタプル、複数の場合は構造体が読みやすいです。
 
 /// リンク作成操作の結果を表す列挙型。
@@ -453,8 +453,8 @@ fn canonicalize_with_ancestor_fallback(path: &Path) -> PathBuf {
 /// 【while let — ループ内のパターンマッチ】
 /// `while let Some(parent) = current.parent()` は、
 /// parent() が Some を返す間ループを続けます。
-/// ルートディレクトリに到達すると parent() は空文字列を返すため、
-/// そこで break します。
+/// 相対パス "" のような場合、parent() は Some("") を返しますが
+/// `as_os_str().is_empty()` でそれを検出して break します。
 fn has_symlink_parent(path: &Path) -> bool {
     let mut current = path.to_path_buf();
     while let Some(parent) = current.parent() {
