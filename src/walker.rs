@@ -51,6 +51,11 @@ pub fn collect_targets(
     no_ignore: bool,
 ) -> Result<Vec<PathBuf>> {
     let overrides = build_overrides(source, patterns)?;
+    // 【.clone() — 値の複製】
+    // Override を clone（複製）しているのは、1つは WalkBuilder に渡し（所有権を移動）、
+    // もう1つはメインループでのマッチング判定に使うためです。
+    // Rust の所有権システムでは、1つの値を2箇所で使う場合、
+    // clone するか参照を使うかの選択が必要です。
     let walker_overrides = overrides.clone();
     // 【Arc（Atomic Reference Counting）— スレッド安全な参照カウント】
     // Arc は複数の所有者でデータを共有するためのスマートポインタです。
@@ -105,6 +110,11 @@ pub fn collect_targets(
                 return true;
             }
 
+            // 【.map().unwrap_or() チェーン — Option の安全な変換】
+            // entry.file_type() は Option<FileType> を返します。
+            // .map(|ft| ft.is_dir()) で Option<bool> に変換し、
+            // .unwrap_or(false) で None の場合は false をデフォルト値とします。
+            // これにより、ファイルタイプが不明な場合も安全に処理できます。
             let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
 
             if is_dir {
@@ -170,13 +180,18 @@ mod tests {
 
     #[test]
     fn collect_targets_skips_unmatched() {
+        // パターンに一致しないファイルがスキップされることを確認
         let dir = tempdir("collect_skip");
         fs::write(dir.join(".env"), "SECRET=1").unwrap();
         fs::write(dir.join("main.rs"), "fn main(){}").unwrap();
         fs::create_dir_all(dir.join("src")).unwrap();
         fs::write(dir.join("src/lib.rs"), "").unwrap();
 
+        // ".env" パターンのみ → .env だけが収集される
         let targets = collect_targets(&dir, &[".env".into()], true).unwrap();
+        // 【テストでのイテレータ活用】
+        // strip_prefix で絶対パスを相対パスに変換し、比較しやすくしています。
+        // `Vec<_>` の `_` は型推論に任せる書き方です（コンパイラが自動で推論）。
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
@@ -186,6 +201,7 @@ mod tests {
 
     #[test]
     fn collect_targets_matches_directory_without_descending() {
+        // ディレクトリがマッチした場合、中身には降りずディレクトリ自体だけが返る
         let dir = tempdir("collect_dir");
         let nm = dir.join("node_modules/pkg");
         fs::create_dir_all(&nm).unwrap();
@@ -197,12 +213,15 @@ mod tests {
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
             .collect();
-        // Should only contain the directory itself, not its children
+        // ディレクトリ自体のみ含まれ、子要素（pkg/index.js）は含まれない
         assert_eq!(rel, vec![Path::new("node_modules")]);
     }
 
     #[test]
     fn collect_targets_negation_pattern() {
+        // 【否定パターン（!）のテスト】
+        // `!.env.production` は .env.production を除外するパターンです。
+        // .gitignore と同じ構文で、先に包含パターンでマッチしたものから除外します。
         let dir = tempdir("collect_neg");
         fs::write(dir.join(".env"), "A=1").unwrap();
         fs::write(dir.join(".env.local"), "B=2").unwrap();
@@ -210,6 +229,8 @@ mod tests {
 
         let targets = collect_targets(
             &dir,
+            // 【&[...] — 配列リテラルからスライスへの変換】
+            // `.into()` で &str → String に変換しています。
             &[".env".into(), ".env.*".into(), "!.env.production".into()],
             true,
         )
@@ -218,11 +239,17 @@ mod tests {
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
             .collect();
+        // .env.production は否定パターンで除外されるため含まれない
         assert_eq!(rel, vec![Path::new(".env"), Path::new(".env.local")]);
     }
 
     #[test]
     fn collect_targets_respects_gitignore() {
+        // 【.gitignore との連携テスト】
+        // dist/ が .gitignore で無視されている場合、
+        // override パターン **/*.js はファイルにマッチするが
+        // ディレクトリ dist/ 自体にはマッチしないため、
+        // .gitignore が適用されて walker がディレクトリごとスキップします。
         let dir = git_tempdir("collect_gitignore");
         fs::create_dir_all(dir.join("src")).unwrap();
         fs::write(dir.join("src/app.js"), "").unwrap();
@@ -230,19 +257,18 @@ mod tests {
         fs::write(dir.join("dist/bundle.js"), "").unwrap();
         fs::write(dir.join(".gitignore"), "dist/\n").unwrap();
 
-        // Glob pattern matches files in both dirs, but dist/ is gitignored.
-        // The override **/*.js doesn't match directory dist/ itself,
-        // so gitignore applies and the walker skips the directory entirely.
         let targets = collect_targets(&dir, &["**/*.js".into()], false).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
             .collect();
+        // dist/bundle.js は .gitignore により除外される
         assert_eq!(rel, vec![Path::new("src/app.js")]);
     }
 
     #[test]
     fn collect_targets_no_ignore_includes_all() {
+        // no_ignore=true で .gitignore を完全に無効化した場合のテスト
         let dir = git_tempdir("collect_noignore");
         fs::create_dir_all(dir.join("src")).unwrap();
         fs::write(dir.join("src/app.js"), "").unwrap();
@@ -250,13 +276,12 @@ mod tests {
         fs::write(dir.join("dist/bundle.js"), "").unwrap();
         fs::write(dir.join(".gitignore"), "dist/\n").unwrap();
 
-        // With no_ignore=true, gitignore is completely disabled
         let targets = collect_targets(&dir, &["**/*.js".into()], true).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
             .collect();
-        // Both files should be included regardless of .gitignore
+        // .gitignore に関係なく全てのマッチが含まれる
         assert_eq!(
             rel,
             vec![Path::new("dist/bundle.js"), Path::new("src/app.js")]
@@ -265,41 +290,47 @@ mod tests {
 
     #[test]
     fn collect_targets_worktreelinks_overrides_gitignore() {
+        // 【Override の優先度テスト】
+        // .env が .gitignore で無視されていても、
+        // .worktreelinks の override パターンが優先されてリンク対象になります。
+        // これが ignore クレートの Override 機能の核心的な動作です。
         let dir = git_tempdir("collect_override");
         fs::write(dir.join(".env"), "SECRET=1").unwrap();
         fs::write(dir.join(".gitignore"), ".env\n").unwrap();
         fs::write(dir.join("README.md"), "# Hello").unwrap();
 
-        // .env is gitignored, but .worktreelinks pattern explicitly includes it
         let targets = collect_targets(&dir, &[".env".into()], false).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
             .collect();
-        // .env should be linked because .worktreelinks override takes precedence
+        // .worktreelinks の override が .gitignore より優先されるため .env が含まれる
         assert_eq!(rel, vec![Path::new(".env")]);
     }
 
+    /// テスト用の一時 git リポジトリを作成するヘルパー関数。
+    /// ignore クレートが .gitignore を認識するために git init が必要です。
     fn git_tempdir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("worktree-link-test-{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        // Initialize git repo so the ignore crate recognizes .gitignore
+        // ignore クレートが .gitignore を認識するために git リポジトリを初期化
         let status = std::process::Command::new("git")
             .args(["init", "--quiet"])
             .current_dir(&dir)
             .status()
-            .expect("git init failed");
-        assert!(status.success(), "git init exited with {status}");
-        // Return canonical path so comparisons work
+            .expect("git init に失敗");
+        assert!(status.success(), "git init が終了コード {status} で失敗");
+        // パスの比較で一致させるために正規化して返す
         fs::canonicalize(&dir).unwrap()
     }
 
+    /// テスト用の一時ディレクトリを作成するヘルパー関数（git 初期化なし）。
     fn tempdir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("worktree-link-test-{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        // Return canonical path so comparisons work
+        // パスの比較で一致させるために正規化して返す
         fs::canonicalize(&dir).unwrap()
     }
 }

@@ -71,12 +71,28 @@ impl Config {
     }
 }
 
+// 【#[cfg(test)] — テストモジュール】
+// `#[cfg(test)]` はこのモジュールがテスト時にのみコンパイルされることを示します。
+// `cargo test` を実行するとこの中のテストが実行されますが、
+// `cargo build` や `cargo run` ではこのコードは完全に無視されます。
+// これにより、本番バイナリにテストコードが含まれません。
 #[cfg(test)]
 mod tests {
+    // 【use super::*】
+    // 親モジュール（config.rs の本体）の全アイテムをインポートします。
+    // テストモジュールは別スコープなので、テスト対象のコードを使うために必要です。
     use super::*;
 
+    // 【#[test] 属性】
+    // この関数がテストケースであることを示します。
+    // `cargo test` で自動的に検出・実行されます。
+    // テスト関数はパニックすると失敗、正常終了すると成功です。
     #[test]
     fn parse_ignores_comments_and_blank_lines() {
+        // 【r#"..."# — 生文字列リテラル（raw string literal）】
+        // `r#"` で始まり `"#` で終わる文字列は、エスケープシーケンスが無効になります。
+        // 改行やバックスラッシュをそのまま含められるため、テストデータの記述に便利です。
+        // `#` の数は対応していれば何個でも OK（例: r##"..."##）。
         let input = r#"
 # This is a comment
 node_modules
@@ -89,6 +105,14 @@ node_modules
 dist/
         "#;
         let config = Config::parse(input);
+        // 【assert_eq! — 値の等価性テスト】
+        // 左右の値が等しくなければパニックし、テストが失敗します。
+        // 失敗時には両方の値が表示されるため、デバッグが容易です。
+        // PartialEq トレイトが実装されている型同士を比較できます。
+        //
+        // 【vec![] マクロ】
+        // Vec を簡潔に初期化するマクロです。
+        // `vec!["a", "b"]` は `Vec::from(["a", "b"])` と同等です。
         assert_eq!(
             config.patterns,
             vec!["node_modules", ".env", ".env.*", ".next/", "dist/"]
@@ -98,11 +122,17 @@ dist/
     #[test]
     fn parse_empty_file() {
         let config = Config::parse("");
+        // 【assert! — 真偽値テスト】
+        // 式が true でなければパニックします。
+        // assert_eq! と違い、単純な bool 条件のチェックに使います。
         assert!(config.patterns.is_empty());
     }
 
     #[test]
     fn parse_only_comments() {
+        // 【\n — 文字列内の改行】
+        // 通常の文字列リテラル（""）ではエスケープシーケンスが有効です。
+        // `\n` は改行文字を表します。
         let config = Config::parse("# comment\n# another");
         assert!(config.patterns.is_empty());
     }

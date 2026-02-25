@@ -46,6 +46,15 @@ fn main() -> Result<()> {
     // RUST_LOG 環境変数が設定されていればそれを使い、なければ --verbose フラグに
     // 応じてログレベルを切り替えます（verbose: debug レベル、通常: warn レベル）。
     let level = if cli.verbose { "debug" } else { "warn" };
+    // 【ビルダーパターン（Builder Pattern）】
+    // `.fmt()` でビルダーを生成し、`.with_env_filter()` や `.without_time()` で
+    // 設定をチェーンし、最後に `.init()` で初期化を完了します。
+    // Rust では戻り値に self を返すことでメソッドチェーンを実現します。
+    //
+    // 【unwrap_or_else と unwrap_or の違い】
+    // - `unwrap_or(デフォルト値)` → デフォルト値を即座に評価（先に計算される）
+    // - `unwrap_or_else(|| 値)` → クロージャで遅延評価（必要な時だけ計算される）
+    // ここでは EnvFilter の生成コストがあるため、unwrap_or_else を使っています。
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -115,11 +124,22 @@ fn main() -> Result<()> {
         // 値を変更したい場合は `mut` キーワードが必要です。
         let mut removed = 0;
         let mut skipped = 0;
+        // 【for ... in &actions — 参照でのイテレーション】
+        // `&actions` は actions の各要素への参照（&UnlinkAction）でイテレートします。
+        // `&` がないと所有権が移動してしまい、後で actions.is_empty() が使えなくなります。
+        // `&` → 借用（読み取り専用）、`&mut` → 可変借用、なし → 所有権の移動
         for action in &actions {
+            // 【フォーマット文字列内の変数キャプチャ】
+            // `{action}` は println! 内で直接変数名を使うキャプチャ構文です。
+            // Display トレイトが実装されているため `{}` で表示できます。
             println!("  {action}");
             // 【match 式による enum の分岐】
             // Rust の match は全てのバリアントを網羅する必要があります（網羅性チェック）。
             // これにより、パターンの追加忘れをコンパイル時に検出できます。
+            //
+            // 【`_` と `..` — ワイルドカードパターン】
+            // `Removed(_)` の `_` は「値はあるが使わない」を意味します。
+            // `Skipped { .. }` の `..` は「残りのフィールドを全て無視」を意味します。
             match action {
                 linker::UnlinkAction::Removed(_) => removed += 1,
                 linker::UnlinkAction::Skipped { .. } => skipped += 1,
@@ -145,10 +165,17 @@ fn main() -> Result<()> {
         // 【unwrap_or_else — Option のデフォルト値】
         // config が None（未指定）の場合、ソースディレクトリ直下の ".worktreelinks" をデフォルトとして使います。
         // unwrap_or_else はクロージャを受け取るため、デフォルト値の計算が遅延評価されます。
+        // 【.clone() が必要な理由】
+        // cli.config は Option<PathBuf> ですが、cli 自体はまだ後で使われるため
+        // 直接所有権を取り出せません。.clone() で複製してから unwrap_or_else に渡します。
         let config_path = cli
             .config
             .clone()
             .unwrap_or_else(|| source.join(".worktreelinks"));
+        // 【&config_path — 参照渡し】
+        // from_file は &Path を受け取るため、&config_path で参照を渡します。
+        // PathBuf は Deref<Target = Path> を実装しているため、
+        // &PathBuf は自動的に &Path に変換されます（Deref 強制）。
         let config = Config::from_file(&config_path)?;
 
         if config.patterns.is_empty() {

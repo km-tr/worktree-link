@@ -143,7 +143,15 @@ pub fn create_link(
     if target_path.exists() || target_path.is_symlink() {
         if !force {
             return Ok(LinkAction::Skipped {
+                // 【.to_path_buf() — &Path から PathBuf への変換】
+                // &Path（借用）を PathBuf（所有型）に変換します。
+                // 列挙型のフィールドは値を所有する必要があるため、
+                // 参照（&Path）のままでは格納できません。
                 target: target_path.to_path_buf(),
+                // 【.into() — 型変換トレイト】
+                // `"文字列".into()` は `String::from("文字列")` の省略形です。
+                // Rust の Into/From トレイトにより、&str → String の変換が
+                // 暗黙的に行われます。型推論でターゲットの型が決まります。
                 reason: "already exists (use --force to overwrite)".into(),
             });
         }
@@ -337,10 +345,17 @@ fn walk_symlinks(dir: &Path, visitor: &mut dyn FnMut(PathBuf) -> Result<()>) -> 
     };
 
     for entry in entries {
+        // 【変数のシャドーイング（shadowing）】
+        // `let entry = match entry { ... }` は同名の変数を再定義しています。
+        // 元の `entry`（Result<DirEntry>）を新しい `entry`（DirEntry）で上書きします。
+        // Rust ではこれを「シャドーイング」と呼び、型を変えつつ意味的に同じ名前を使えます。
+        // 別名（例: raw_entry, unwrapped_entry）を付けるより簡潔です。
         let entry = match entry {
             Ok(e) => e,
             Err(e) => {
                 warn!("Skipping entry: {e}");
+                // 【continue — ループの次のイテレーションへ】
+                // エラーが発生したエントリはスキップして、次のエントリの処理に進みます。
                 continue;
             }
         };
@@ -358,9 +373,14 @@ fn walk_symlinks(dir: &Path, visitor: &mut dyn FnMut(PathBuf) -> Result<()>) -> 
         };
 
         if meta.file_type().is_symlink() {
+            // visitor クロージャを呼び出してシンボリックリンクを処理する
             visitor(path)?;
         } else if meta.is_dir() {
             // .git ディレクトリはスキップ（リポジトリの内部構造を壊さないため）
+            // 【.is_some_and() — Option のチェックと条件を1行で】
+            // `file_name()` は `Option<&OsStr>` を返します。
+            // `.is_some_and(|n| n == ".git")` は Some の場合にクロージャの条件も
+            // チェックする便利メソッドです（Rust 1.70 で安定化）。
             if path.file_name().is_some_and(|n| n == ".git") {
                 continue;
             }
@@ -518,32 +538,53 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    /// テストごとに一意な一時ディレクトリを作成するヘルパー関数。
+    ///
+    /// 【一意性の保証】
+    /// プロセスID + ナノ秒タイムスタンプを組み合わせて、並行テスト実行時も
+    /// ディレクトリ名が衝突しないようにしています。
     fn unique_temp_dir() -> PathBuf {
         let mut dir = std::env::temp_dir();
+        // 【SystemTime と Duration】
+        // `SystemTime::now()` で現在時刻を取得し、
+        // `duration_since(UNIX_EPOCH)` で Unix エポック（1970年1月1日）からの
+        // 経過時間を取得します。.as_nanos() でナノ秒に変換します。
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("system time before UNIX_EPOCH")
+            .expect("システム時刻が UNIX_EPOCH より前です")
             .as_nanos();
+        // 【std::process::id() — プロセスID の取得】
+        // OS が割り当てるプロセスIDを取得します。
+        // テストの並行実行時にディレクトリ名の衝突を防ぎます。
         dir.push(format!("worktree-link-test-{}-{nanos}", std::process::id()));
-        fs::create_dir_all(&dir).expect("failed to create test temp dir");
+        fs::create_dir_all(&dir).expect("テスト用一時ディレクトリの作成に失敗");
         dir
     }
 
+    // 【複数の #[cfg] 属性の組み合わせ】
+    // `#[cfg(unix)]` と `#[test]` を両方付けると、
+    // 「Unix でかつテスト時」にのみコンパイル・実行されます。
+    // Windows では このテストは完全にスキップされます。
     #[cfg(unix)]
     #[test]
     fn canonicalize_with_ancestor_fallback_resolves_alias_for_dangling_path() {
         let root = unique_temp_dir();
         let real = root.join("real");
-        fs::create_dir_all(&real).expect("failed to create real dir");
+        fs::create_dir_all(&real).expect("real ディレクトリの作成に失敗");
 
+        // エイリアス（シンボリックリンク）を作成: alias → real
         let alias = root.join("alias");
-        std::os::unix::fs::symlink(&real, &alias).expect("failed to create alias symlink");
+        std::os::unix::fs::symlink(&real, &alias)
+            .expect("エイリアスシンボリックリンクの作成に失敗");
 
+        // 壊れたパス: alias/missing/child（missing は存在しない）
+        // canonicalize_with_ancestor_fallback は alias を解決して
+        // real/missing/child を返すべき
         let dangling = alias.join("missing").join("child");
         let resolved = canonicalize_with_ancestor_fallback(&dangling);
-        let canonical_real = fs::canonicalize(&real).expect("failed to canonicalize real dir");
+        let canonical_real = fs::canonicalize(&real).expect("real ディレクトリの正規化に失敗");
         assert_eq!(resolved, canonical_real.join("missing").join("child"));
 
-        fs::remove_dir_all(&root).expect("failed to cleanup temp dir");
+        fs::remove_dir_all(&root).expect("テスト後のクリーンアップに失敗");
     }
 }

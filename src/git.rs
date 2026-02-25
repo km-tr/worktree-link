@@ -91,7 +91,7 @@ mod tests {
     fn detect_main_worktree_returns_main_path() {
         let main_dir = git_tempdir("detect_main");
 
-        // Create an initial commit so `git worktree add` works
+        // `git worktree add` を動かすために初期コミットを作成する
         fs::write(main_dir.join("README.md"), "# test").unwrap();
         let status = Command::new("git")
             .args(["add", "."])
@@ -106,7 +106,7 @@ mod tests {
             .unwrap();
         assert!(status.success());
 
-        // Add a linked worktree
+        // リンクされたワークツリーを追加する
         let wt_dir = std::env::temp_dir().join("worktree-link-test-detect_main_wt");
         let _ = fs::remove_dir_all(&wt_dir);
         let status = Command::new("git")
@@ -116,11 +116,15 @@ mod tests {
             .unwrap();
         assert!(status.success());
 
-        // Detect from the linked worktree should return the main worktree path
+        // リンクされたワークツリーから検出すると、メインワークツリーのパスが返るべき
         let detected = detect_main_worktree_in(&wt_dir).unwrap();
         assert_eq!(detected, main_dir);
 
-        // Cleanup
+        // テスト後のクリーンアップ
+        // 【`let _ = ...` — 戻り値の明示的な破棄】
+        // Rust では未使用の Result に対して警告が出ますが、
+        // `let _ = ...` で意図的に無視していることを明示できます。
+        // クリーンアップ処理では失敗しても問題ないため、エラーを無視しています。
         let _ = Command::new("git")
             .args(["worktree", "remove", "--force", wt_dir.to_str().unwrap()])
             .current_dir(&main_dir)
@@ -130,6 +134,7 @@ mod tests {
 
     #[test]
     fn detect_main_worktree_from_main_returns_self() {
+        // メインワークツリー自身から検出した場合、自分自身のパスが返る
         let main_dir = git_tempdir("detect_self");
 
         let detected = detect_main_worktree_in(&main_dir).unwrap();
@@ -138,28 +143,37 @@ mod tests {
 
     #[test]
     fn detect_main_worktree_outside_git_repo_fails() {
+        // git リポジトリ外で実行するとエラーになることを確認
         let dir = tempdir("detect_nogit");
 
         let result = detect_main_worktree_in(&dir);
         assert!(result.is_err());
+        // 【.unwrap_err() — Err の中身を取り出す】
+        // Result が Err であることを前提に中身を取り出します。
+        // Ok だった場合はパニックします（テストでは意図的に使います）。
         let err_msg = result.unwrap_err().to_string();
+        // エラーメッセージに --source が含まれていることを確認
+        // （ユーザーに代替手段を案内しているか）
         assert!(
             err_msg.contains("--source"),
-            "Error message should mention --source, got: {err_msg}"
+            "エラーメッセージに --source が含まれるべき、実際: {err_msg}"
         );
     }
 
     #[test]
     fn parse_main_worktree_extracts_first_entry() {
         let dir = git_tempdir("parse_first");
+        // 【--allow-empty — 空のコミットを許可】
+        // 通常 git はファイル変更なしのコミットを拒否しますが、
+        // テストではこのフラグで空コミットを作成しています。
         let commit = Command::new("git")
             .args(["commit", "--allow-empty", "-m", "init"])
             .current_dir(&dir)
             .output()
             .unwrap();
-        assert!(commit.status.success(), "git commit failed");
+        assert!(commit.status.success(), "git commit に失敗");
 
-        // Get raw porcelain output
+        // 生の porcelain 出力を取得してパース関数に渡す
         let output = Command::new("git")
             .args(["worktree", "list", "--porcelain"])
             .current_dir(&dir)
@@ -167,14 +181,22 @@ mod tests {
             .unwrap();
         let stdout = String::from_utf8_lossy(&output.stdout);
 
-        // Delegate to the function under test
+        // テスト対象の関数に委譲
         let parsed = parse_main_worktree(&stdout).unwrap();
         assert_eq!(parsed, dir);
 
         let _ = fs::remove_dir_all(&dir);
     }
 
+    /// テスト用の一時 git リポジトリを作成するヘルパー関数。
+    ///
+    /// 【テストヘルパーのパターン】
+    /// テストで繰り返し使うセットアップ処理は、ヘルパー関数にまとめます。
+    /// `#[test]` 属性がない関数はテストケースとして実行されません。
     fn git_tempdir(name: &str) -> PathBuf {
+        // 【format! マクロと文字列補間】
+        // `format!("...{name}")` は変数を直接文字列に埋め込む構文です。
+        // Rust 1.58 で安定化された「キャプチャ付きフォーマット」です。
         let dir = std::env::temp_dir().join(format!("worktree-link-test-{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
@@ -182,9 +204,9 @@ mod tests {
             .args(["init", "--quiet"])
             .current_dir(&dir)
             .status()
-            .expect("git init failed");
-        assert!(status.success(), "git init exited with {status}");
-        // Set user config for commits
+            .expect("git init に失敗");
+        assert!(status.success(), "git init が終了コード {status} で失敗");
+        // コミット用にユーザー設定を行う（テスト環境にはグローバル設定がないため）
         let status = Command::new("git")
             .args(["config", "user.email", "test@test.com"])
             .current_dir(&dir)
@@ -197,10 +219,14 @@ mod tests {
             .status()
             .unwrap();
         assert!(status.success());
-        // Return canonical path so comparisons work
+        // 正規化したパスを返す（パスの比較で一致させるため）
+        // 【fs::canonicalize の重要性】
+        // macOS では /tmp が /private/tmp のシンボリックリンクなので、
+        // canonicalize しないと assert_eq! でパスが一致しません。
         fs::canonicalize(&dir).unwrap()
     }
 
+    /// テスト用の一時ディレクトリを作成するヘルパー関数（git 初期化なし）。
     fn tempdir(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("worktree-link-test-{name}"));
         let _ = fs::remove_dir_all(&dir);
