@@ -50,8 +50,9 @@ fn main() -> Result<()> {
         bail!("Source and target cannot be the same directory");
     }
 
-    if target.starts_with(&source) || source.starts_with(&target) {
-        bail!("Source and target must not be nested");
+    // source が target の中にある場合は不正（リンク先が自分自身を含むケースになる）
+    if source.starts_with(&target) {
+        bail!("Source must not be inside target");
     }
 
     if cli.dry_run {
@@ -102,7 +103,16 @@ fn main() -> Result<()> {
             return Ok(());
         }
 
-        let targets = walker::collect_targets(&source, &config.patterns, cli.no_ignore)?;
+        // target が source 内にネストしている場合（例: Claude Code worktree）、
+        // walker が target 配下に降りないよう除外する
+        let exclude_dirs: Vec<std::path::PathBuf> = if target.starts_with(&source) {
+            vec![target.clone()]
+        } else {
+            vec![]
+        };
+
+        let targets =
+            walker::collect_targets(&source, &config.patterns, cli.no_ignore, &exclude_dirs)?;
 
         if targets.is_empty() {
             println!(

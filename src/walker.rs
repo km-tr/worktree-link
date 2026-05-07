@@ -24,6 +24,7 @@ pub fn collect_targets(
     source: &Path,
     patterns: &[String],
     no_ignore: bool,
+    exclude_dirs: &[PathBuf],
 ) -> Result<Vec<PathBuf>> {
     let overrides = build_overrides(source, patterns)?;
     let walker_overrides = overrides.clone();
@@ -41,6 +42,7 @@ pub fn collect_targets(
     let overrides_clone = Arc::clone(&overrides);
     let matched_dirs_clone = Arc::clone(&matched_dirs);
     let source_owned = source.to_path_buf();
+    let exclude_dirs_owned: Vec<PathBuf> = exclude_dirs.to_vec();
 
     let walker = WalkBuilder::new(source)
         .hidden(false)
@@ -56,6 +58,11 @@ pub fn collect_targets(
             }
 
             let path = entry.path();
+
+            // Skip excluded directories (e.g. nested worktree targets)
+            if exclude_dirs_owned.iter().any(|d| path.starts_with(d)) {
+                return false;
+            }
 
             // Always allow the root itself
             if path == source_owned {
@@ -121,7 +128,7 @@ mod tests {
         fs::create_dir_all(dir.join("src")).unwrap();
         fs::write(dir.join("src/lib.rs"), "").unwrap();
 
-        let targets = collect_targets(&dir, &[".env".into()], true).unwrap();
+        let targets = collect_targets(&dir, &[".env".into()], true, &[]).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
@@ -137,7 +144,7 @@ mod tests {
         fs::write(nm.join("index.js"), "").unwrap();
         fs::write(dir.join("app.js"), "").unwrap();
 
-        let targets = collect_targets(&dir, &["node_modules".into()], true).unwrap();
+        let targets = collect_targets(&dir, &["node_modules".into()], true, &[]).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
@@ -157,6 +164,7 @@ mod tests {
             &dir,
             &[".env".into(), ".env.*".into(), "!.env.production".into()],
             true,
+            &[],
         )
         .unwrap();
         let rel: Vec<_> = targets
@@ -178,7 +186,7 @@ mod tests {
         // Glob pattern matches files in both dirs, but dist/ is gitignored.
         // The override **/*.js doesn't match directory dist/ itself,
         // so gitignore applies and the walker skips the directory entirely.
-        let targets = collect_targets(&dir, &["**/*.js".into()], false).unwrap();
+        let targets = collect_targets(&dir, &["**/*.js".into()], false, &[]).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
@@ -196,7 +204,7 @@ mod tests {
         fs::write(dir.join(".gitignore"), "dist/\n").unwrap();
 
         // With no_ignore=true, gitignore is completely disabled
-        let targets = collect_targets(&dir, &["**/*.js".into()], true).unwrap();
+        let targets = collect_targets(&dir, &["**/*.js".into()], true, &[]).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
@@ -216,12 +224,32 @@ mod tests {
         fs::write(dir.join("README.md"), "# Hello").unwrap();
 
         // .env is gitignored, but .worktreelinks pattern explicitly includes it
-        let targets = collect_targets(&dir, &[".env".into()], false).unwrap();
+        let targets = collect_targets(&dir, &[".env".into()], false, &[]).unwrap();
         let rel: Vec<_> = targets
             .iter()
             .map(|p| p.strip_prefix(&dir).unwrap())
             .collect();
         // .env should be linked because .worktreelinks override takes precedence
+        assert_eq!(rel, vec![Path::new(".env")]);
+    }
+
+    #[test]
+    fn collect_targets_excludes_nested_dir() {
+        let dir = tempdir("collect_exclude");
+        fs::write(dir.join(".env"), "SECRET=1").unwrap();
+        // Simulate a nested worktree inside .claude/worktrees/
+        let nested = dir.join(".claude/worktrees/test-wt");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(nested.join(".env"), "NESTED=1").unwrap();
+        fs::write(nested.join("other.txt"), "data").unwrap();
+
+        let targets =
+            collect_targets(&dir, &[".env".into(), "**/*.txt".into()], true, &[nested]).unwrap();
+        let rel: Vec<_> = targets
+            .iter()
+            .map(|p| p.strip_prefix(&dir).unwrap())
+            .collect();
+        // Only the top-level .env should match; nested files are excluded
         assert_eq!(rel, vec![Path::new(".env")]);
     }
 
