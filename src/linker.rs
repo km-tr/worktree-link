@@ -219,15 +219,13 @@ pub fn unlink_targets(
             return Ok(());
         }
 
-        if !dry_run {
-            if let Err(e) = remove_entry(&entry_path) {
-                warn!("Failed to remove {}: {e}", entry_path.display());
-                actions.push(UnlinkAction::Skipped {
-                    target: entry_path,
-                    reason: format!("removal failed: {e}"),
-                });
-                return Ok(());
-            }
+        if !dry_run && let Err(e) = remove_entry(&entry_path) {
+            warn!("Failed to remove {}: {e}", entry_path.display());
+            actions.push(UnlinkAction::Skipped {
+                target: entry_path,
+                reason: format!("removal failed: {e}"),
+            });
+            return Ok(());
         }
 
         if dry_run {
