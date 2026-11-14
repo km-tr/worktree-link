@@ -4,7 +4,7 @@ mod git;
 mod linker;
 mod walker;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use colored::Colorize;
 use std::fs;

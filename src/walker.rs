@@ -71,12 +71,10 @@ pub fn collect_targets(
 
             let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
 
-            if is_dir {
-                if let Match::Whitelist(_) = overrides_clone.matched(path, true) {
-                    // This directory matches — record it and stop descent
-                    matched_dirs_clone.lock().unwrap().push(path.to_path_buf());
-                    return false;
-                }
+            if is_dir && let Match::Whitelist(_) = overrides_clone.matched(path, true) {
+                // This directory matches — record it and stop descent
+                matched_dirs_clone.lock().unwrap().push(path.to_path_buf());
+                return false;
             }
 
             true
