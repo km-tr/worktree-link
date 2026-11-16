@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/km-tr/worktree-link/compare/v0.1.3...v0.1.4) - 2026-11-16
+
+### Fixed
+
+- *(deps)* update rust crate colored to v3 ([#21](https://github.com/km-tr/worktree-link/pull/21))
+- allow nested worktrees when target is inside source
+
+### Other
+
+- migrate to Rust 2024 edition ([#23](https://github.com/km-tr/worktree-link/pull/23))
+- *(deps)* update actions/checkout action to v7 ([#20](https://github.com/km-tr/worktree-link/pull/20))
+- *(deps)* update rust crate clap to v4.6.7 ([#19](https://github.com/km-tr/worktree-link/pull/19))
+- update cargo-dist to 0.34.0 ([#18](https://github.com/km-tr/worktree-link/pull/18))
+- *(deps)* update dependency lefthook to v2.2.2 ([#16](https://github.com/km-tr/worktree-link/pull/16))
+- *(deps)* update all patch dependencies (patch) ([#15](https://github.com/km-tr/worktree-link/pull/15))
+- Configure Renovate ([#14](https://github.com/km-tr/worktree-link/pull/14))
+
 ## [0.1.3](https://github.com/km-tr/worktree-link/compare/v0.1.2...v0.1.3) - 2026-02-25
 
 ### Other
