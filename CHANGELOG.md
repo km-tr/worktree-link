@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7](https://github.com/km-tr/worktree-link/compare/v0.1.6...v0.1.7) - 2026-11-28
+
+### Other
+
+- *(deps)* update all patch dependencies (patch) ([#32](https://github.com/km-tr/worktree-link/pull/32))
+
 ## [0.1.6](https://github.com/km-tr/worktree-link/compare/v0.1.5...v0.1.6) - 2026-11-23
 
 ### Other
